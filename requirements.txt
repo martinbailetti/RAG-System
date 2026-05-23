@@ -1,0 +1,36 @@
+# Dependencias para el proyecto SMIRAG
+# Sistema de ingesta masiva y RAG con LangChain + Gemini
+
+# Componentes principales de LangChain (versiones estabilizadas para despliegues en otras PCs)
+langchain==0.2.17
+langchain-core==0.2.43
+langchain-text-splitters==0.2.2
+langchain-chroma==0.2.2
+langchain-community==0.2.17
+langchain-google-genai==1.0.10
+
+# Base de datos vectorial
+chromadb==0.4.24
+
+# Procesamiento de PDFs
+pypdf2==3.0.1
+pymupdf==1.23.26
+
+# API de Google Generative AI
+google-generativeai>=0.7.0,<0.8.0
+protobuf>=3.21.12,<5.0.0
+
+# Utilidades adicionales
+python-dotenv==1.0.1
+requests==2.31.0
+beautifulsoup4==4.14.2
+snowballstemmer==2.2.0
+fastapi>=0.115.0,<1.0.0
+pydantic>=2.7,<3.0
+
+# NLP opcional para lematización española (instalar si se desea precisión adicional)
+spacy>=3.7.0,<4.0.0
+https://github.com/explosion/spacy-models/releases/download/es_core_news_sm-3.7.0/es_core_news_sm-3.7.0-py3-none-any.whl
+
+# Embeddings HuggingFace
+sentence-transformers>=2.7.0,<3.0.0
