@@ -2,3 +2,6 @@
 /mydocs_chroma_dev_database
 .env.ONLINE1
 .env.PCFitxatge
+/ingesta/__pycache__
+/ingesta/__pycache__
+smirag.log

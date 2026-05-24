@@ -60,3 +60,9 @@
 2026-05-20 23:58:58 [INFO] smirag: Keywords: ['gestion', 'procesos']
 2026-05-20 23:58:59 [INFO] smirag: Añadidos 12 fragmentos por coincidencia de ruta.
 2026-05-20 23:59:01 [INFO] smirag: Resultado: found=True, docs=5, fuentes=['normativamoderniza\\pcm\\nt gestión por procesos 2025_nueva\\guía práctica 2025\\7260049-guia-practica-para-la-gestion-por-procesos.pdf', 'normativamoderniza\\pcm\\nt gestión por procesos 2025_nueva\\6501954-norma-tecnica-n-002-2025-pcm-sgp-f-f.pdf', 'normativamoderniza\\pcm\\guia pcm_implementación de la gestión por procesos.pdf.pdf']
+2026-05-23 21:38:08 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-23 21:38:36 [INFO] smirag: ALL_SOURCES: 29 fuentes únicas indexadas.
+2026-05-23 21:38:36 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
+2026-05-23 21:38:41 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-23 21:38:48 [INFO] smirag: ALL_SOURCES: 29 fuentes únicas indexadas.
+2026-05-23 21:38:48 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
