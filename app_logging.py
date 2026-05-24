@@ -6,24 +6,24 @@ Uso desde cualquier módulo:
     logger.info("Mensaje informativo")
     logger.warning("Algo inesperado")
     logger.error("Error grave")
-    logger.debug("Solo visible si SMIRAG_LOG_LEVEL=DEBUG")
+    logger.debug("Solo visible si RAG_LOG_LEVEL=DEBUG")
 
 El log se escribe a:
   - Consola (stdout) — siempre
   - Archivo  rag.log  — siempre (rotación automática a 5 MB, máx. 3 backups)
 
 Variables de entorno:
-  SMIRAG_LOG_LEVEL   = DEBUG | INFO (default) | WARNING | ERROR
-  SMIRAG_LOG_FILE    = ruta del archivo (default: rag.log en raíz del proyecto)
+  RAG_LOG_LEVEL   = DEBUG | INFO (default) | WARNING | ERROR
+  RAG_LOG_FILE    = ruta del archivo (default: rag.log en raíz del proyecto)
 """
 
 import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-_LOG_LEVEL = os.environ.get("SMIRAG_LOG_LEVEL", "INFO").upper()
+_LOG_LEVEL = os.environ.get("RAG_LOG_LEVEL", "INFO").upper()
 _LOG_FILE = os.environ.get(
-    "SMIRAG_LOG_FILE",
+    "RAG_LOG_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag.log"),
 )
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB por archivo

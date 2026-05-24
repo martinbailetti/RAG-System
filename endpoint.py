@@ -22,7 +22,7 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, FileResponse
 import langchain
 from typing import Optional, List
 
@@ -157,7 +157,7 @@ FALLBACK_K = 150
 TARGET_KEYWORD_DOCS = 3
 MAX_CONTEXT_DOCS = 5
 MAX_FALLBACK_APPEND = 20
-SERVER_PORT = int(os.environ.get("SMIRAG_PORT", "8888"))
+SERVER_PORT = int(os.environ.get("RAG_PORT", "8888"))
 
 # Lock threading para impedir que /ingesta/sync corra en paralelo consigo mismo.
 # sync_ingesta.py (proceso externo) usa ingesta_lock.py para coordinarse entre procesos.
@@ -166,7 +166,7 @@ _ingesta_lock = threading.Lock()
 if SPACY_AVAILABLE:
     logger.info("spaCy activo: se usan lemas para normalizar las preguntas.")
 elif SPACY_DISABLED:
-    logger.info("spaCy deshabilitado por SMIRAG_DISABLE_SPACY; heurísticas básicas en uso.")
+    logger.info("spaCy deshabilitado por RAG_DISABLE_SPACY; heurísticas básicas en uso.")
 else:
     logger.info("spaCy no disponible; se mantienen heurísticas básicas de lematización.")
 
@@ -201,12 +201,12 @@ def _build_chroma_filter(
         if allowed_sources is not None:
             intersection = [r for r in rutas_norm if r in allowed_sources]
             if not intersection:
-                return {"source": {"$eq": "__SMIRAG_NO_MATCH__"}}
+                return {"source": {"$eq": "__RAG_NO_MATCH__"}}
             return {"source": {"$in": intersection}}
         return {"source": {"$in": rutas_norm}}
     if allowed_sources is not None:
         if not allowed_sources:
-            return {"source": {"$eq": "__SMIRAG_NO_MATCH__"}}
+            return {"source": {"$eq": "__RAG_NO_MATCH__"}}
         if len(allowed_sources) == len(ALL_SOURCES):
             return None  # Todas las fuentes coinciden, filtro innecesario
         return {"source": {"$in": list(allowed_sources)}}
@@ -276,7 +276,7 @@ def health(type: Optional[str] = Query(default=None)):
     )
     html = f"""<!DOCTYPE html>
 <html lang='es'>
-<head><meta charset='UTF-8'><title>SMIRAG – Health</title>
+<head><meta charset='UTF-8'><title>RAG – Health</title>
 <style>body{{font-family:sans-serif;background:#f5f5f5;display:flex;justify-content:center;padding:40px}}
 table{{background:#fff;border-radius:8px;box-shadow:0 2px 8px #0002;border-collapse:collapse}}
 th{{background:{color};color:#fff;padding:10px 18px;text-align:left}}
@@ -284,7 +284,7 @@ tr:nth-child(even){{background:#f9f9f9}}</style>
 </head>
 <body>
 <table>
-  <tr><th colspan='2'>SMIRAG – Estado del servidor</th></tr>
+  <tr><th colspan='2'>RAG – Estado del servidor</th></tr>
   {rows}
 </table>
 </body></html>"""
@@ -798,8 +798,8 @@ def obtener_estructura(base: Optional[str] = None):
 
 # ── /ingesta/sync ───────────────────────────────────────────────────────────
 
-# URL del endpoint de smi_api para notificar tras ingesta (ej: http://localhost:8000/api/smidocs/ingesta/notify)
-INGESTA_NOTIFY_URL = os.environ.get("SMIRAG_INGESTA_NOTIFY_URL", "").strip()
+# URL del endpoint de api para notificar tras ingesta (ej: http://localhost:8000/api/docs/ingesta/notify)
+INGESTA_NOTIFY_URL = os.environ.get("RAG_INGESTA_NOTIFY_URL", "").strip()
 
 def _refresh_vectorstore():
     """Reinicializa el vectorstore, colección, token index y ALL_SOURCES tras una ingesta."""
@@ -822,10 +822,10 @@ def _refresh_vectorstore():
 
 
 def _notify_ingesta(folder: str, documentos: list, eliminados: list | None = None):
-    """Envía notificación POST a smi_api con los documentos procesados y eliminados."""
+    """Envía notificación POST a api con los documentos procesados y eliminados."""
     eliminados = eliminados or []
     if not INGESTA_NOTIFY_URL:
-        logger.debug("SMIRAG_INGESTA_NOTIFY_URL no configurado; omitiendo notificación de ingesta.")
+        logger.debug("RAG_INGESTA_NOTIFY_URL no configurado; omitiendo notificación de ingesta.")
         return
     if not documentos and not eliminados:
         logger.info("Ingesta sin cambios; omitiendo notificación.")
@@ -873,7 +873,7 @@ def _restart_server():
     start_cmd = (
         f'start "" /B "{pythonw}" '
         f"-m uvicorn endpoint:app --host 0.0.0.0 --port {SERVER_PORT} "
-        f'>> smidocs.log 2>&1'
+        f'>> docs.log 2>&1'
     )
     full_cmd = (
         f"timeout /t 2 /nobreak >nul & "
@@ -936,7 +936,7 @@ def _sync_job(folder: str, restart: bool = False):
         except Exception as exc:
             logger.exception("[ingesta/sync] Error en _refresh_vectorstore: %s", exc)
 
-    # Notificar a smi_api en un hilo aparte para no bloquear
+    # Notificar a api en un hilo aparte para no bloquear
     if processed_docs or deleted_docs:
         threading.Thread(
             target=_notify_ingesta,
@@ -1088,9 +1088,6 @@ def restart_server():
     inmediatamente y restart.bat espera 2 segundos antes de reactivar.
     """
     bat_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "restart.bat")
-    if not os.path.isfile(bat_path):
-        # Fallback a la ruta de producción
-        bat_path = r"D:\smidocs\restart.bat"
     if not os.path.isfile(bat_path):
         raise HTTPException(status_code=500, detail="restart.bat no encontrado.")
 
@@ -1255,7 +1252,7 @@ def detalle_documento(ruta: str):
     """Retorna el texto completo (todos los chunks concatenados) de un documento indexado.
 
     Parámetros:
-    - ruta: ruta exacta del documento tal como aparece en /documentos (ej. smidocs/tecnico/manual.pdf)
+    - ruta: ruta exacta del documento tal como aparece en /documentos (ej. docs/tecnico/manual.pdf)
     """
     collection = get_chroma_collection(db)
     if not collection:
@@ -1313,6 +1310,53 @@ def detalle_documento(ruta: str):
         mtime=md.get("source_mtime") or None,
         size=md.get("source_size") or None,
         texto=texto_completo,
+    )
+
+
+# ── /documentos/archivo ─────────────────────────────────────────────────────
+
+@app.get("/documentos/archivo")
+def descargar_archivo(ruta: str):
+    """Descarga el archivo original del disco.
+
+    Parámetros:
+    - ruta: ruta tal como aparece en /documentos (ej. docs/tecnico/manual.pdf)
+
+    El archivo debe estar dentro de DOCUMENTS_FOLDER. Se rechaza cualquier
+    intento de salir de esa carpeta (path traversal).
+    """
+    from ingesta.config import DOCUMENTS_FOLDER
+
+    if not ruta or not ruta.strip():
+        raise HTTPException(status_code=422, detail="El parámetro ruta es obligatorio.")
+
+    # Resolver la ruta candidata: puede ser absoluta (ya indexada así) o relativa
+    ruta_clean = ruta.strip()
+    if os.path.isabs(ruta_clean):
+        candidate = os.path.normcase(os.path.normpath(ruta_clean))
+    else:
+        candidate = os.path.normcase(os.path.normpath(os.path.join(DOCUMENTS_FOLDER, ruta_clean)))
+
+    docs_root = os.path.normcase(os.path.normpath(DOCUMENTS_FOLDER))
+
+    # Seguridad: la ruta resuelta debe estar dentro de DOCUMENTS_FOLDER
+    if not candidate.startswith(docs_root + os.sep) and candidate != docs_root:
+        raise HTTPException(status_code=403, detail="Acceso denegado.")
+
+    if not os.path.isfile(candidate):
+        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {ruta}")
+
+    filename = os.path.basename(candidate)
+
+    # Detectar mime-type según extensión
+    import mimetypes
+    mime, _ = mimetypes.guess_type(candidate)
+    media_type = mime or "application/octet-stream"
+
+    return FileResponse(
+        path=candidate,
+        media_type=media_type,
+        filename=filename,
     )
 
 

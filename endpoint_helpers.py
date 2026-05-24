@@ -69,15 +69,15 @@ _OFFERS_ALTERNATIVES_REGEXES = [
 # ── Funciones auxiliares ────────────────────────────────────────────────────
 
 def _is_debug_responses() -> bool:
-    """Devuelve True si SMIRAG_DEBUG_RESPONSES está activo.
+    """Devuelve True si RAG_DEBUG_RESPONSES está activo.
 
     Cuando está activo:
     - found siempre es True → el frontend muestra la respuesta real del LLM
       en vez del mensaje fijo "No encontramos una respuesta..."
     - Se incluye debug_info con keywords, formas, fuentes y scoring.
-    Activar con SMIRAG_DEBUG_RESPONSES=1 en .env o entorno.
+    Activar con RAG_DEBUG_RESPONSES=1 en .env o entorno.
     """
-    return os.environ.get("SMIRAG_DEBUG_RESPONSES", "0").strip().lower() in ("1", "true", "yes", "on")
+    return os.environ.get("RAG_DEBUG_RESPONSES", "0").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _detectar_saludo(texto: str) -> str | None:
@@ -197,7 +197,7 @@ def _format_conversation_for_prompt(raw_conversation: Optional[List[Dict[str, An
     if not raw_conversation:
         return ""
 
-    max_chars = _safe_int(os.environ.get("SMIRAG_MAX_CONVERSATION_CHARS", "4000"), 4000)
+    max_chars = _safe_int(os.environ.get("RAG_MAX_CONVERSATION_CHARS", "4000"), 4000)
     max_chars = max(0, min(max_chars, 20000))
     if max_chars == 0:
         return ""

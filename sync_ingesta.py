@@ -17,13 +17,13 @@ from ingesta.ingesta_lock import acquire_lock, release_lock
 
 load_host_env()
 
-INGESTA_NOTIFY_URL = os.environ.get("SMIRAG_INGESTA_NOTIFY_URL", "").strip()
+INGESTA_NOTIFY_URL = os.environ.get("RAG_INGESTA_NOTIFY_URL", "").strip()
 
 
 def _notify_ingesta(folder: str, documentos: list, eliminados: list) -> None:
     """Envía notificación POST a api con los documentos procesados y eliminados."""
     if not INGESTA_NOTIFY_URL:
-        print("⚠️  SMIRAG_INGESTA_NOTIFY_URL no configurado; omitiendo notificación.")
+        print("⚠️  RAG_INGESTA_NOTIFY_URL no configurado; omitiendo notificación.")
         return
     if not documentos and not eliminados:
         print("ℹ️  Ingesta sin cambios; omitiendo notificación.")

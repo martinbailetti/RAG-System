@@ -9,10 +9,10 @@ echo Proceso detenido. Esperando 2 segundos...
 timeout /t 2 /nobreak >nul
 
 REM Iniciar de nuevo
-cd /d D:\smidocs
+cd /d D:\docs
 
-start "" /B D:\smidocs\venv\Scripts\pythonw.exe ^
+start "" /B D:\docs\venv\Scripts\pythonw.exe ^
     -m uvicorn endpoint:app --host 0.0.0.0 --port 8888 ^
-    >> D:\smidocs\smidocs.log 2>&1
+    >> D:\docs\docs.log 2>&1
 
 echo Servidor reiniciado en puerto 8888.

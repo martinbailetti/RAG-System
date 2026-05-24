@@ -1,4 +1,4 @@
-# Dependencias para el proyecto SMIRAG
+# Dependencias para el proyecto RAG
 # Sistema de ingesta masiva y RAG con LangChain + Gemini
 
 # Componentes principales de LangChain (versiones estabilizadas para despliegues en otras PCs)

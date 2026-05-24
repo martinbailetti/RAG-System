@@ -40,7 +40,7 @@ except Exception:  # pragma: no cover - si la librería no está disponible
 
 # Las variables de entorno ya se cargaron al importar el módulo.
 
-_DISABLE_SPACY = os.environ.get("SMIRAG_DISABLE_SPACY", "").strip().lower() in {"1", "true", "yes", "on"}
+_DISABLE_SPACY = os.environ.get("RAG_DISABLE_SPACY", "").strip().lower() in {"1", "true", "yes", "on"}
 
 MODELO_CONSULTA = os.environ.get("GEMINI_MODEL_QUERY", "gemini-2.5-flash")
 
@@ -194,7 +194,7 @@ else:  # pragma: no cover - fallback sin stemming
 
 _SPACY_NLP = None
 if spacy is not None and not _DISABLE_SPACY:  # pragma: no cover - carga perezosa de spaCy
-    _SPACY_MODEL_NAME = os.environ.get("SMIRAG_SPACY_MODEL", "es_core_news_sm")
+    _SPACY_MODEL_NAME = os.environ.get("RAG_SPACY_MODEL", "es_core_news_sm")
     try:
         _SPACY_NLP = spacy.load(_SPACY_MODEL_NAME, exclude=["parser", "ner", "textcat"])
         if "lemmatizer" not in _SPACY_NLP.pipe_names:  # garantía de lematización

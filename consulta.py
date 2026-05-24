@@ -69,7 +69,7 @@ retriever = db.as_retriever(search_kwargs={"k": RETRIEVAL_K})
 if SPACY_AVAILABLE:
     print("Lematizador spaCy activo para normalizar consultas.")
 elif SPACY_DISABLED:
-    print("spaCy deshabilitado por SMIRAG_DISABLE_SPACY; se aplican heurísticas básicas.")
+    print("spaCy deshabilitado por RAG_DISABLE_SPACY; se aplican heurísticas básicas.")
 else:
     print("spaCy no está instalado; se aplican heurísticas básicas de lematización.")
 

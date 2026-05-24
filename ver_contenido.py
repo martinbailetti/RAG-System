@@ -5,7 +5,7 @@ Uso:
     python ver_contenido.py <ruta_del_archivo>
 
 Ejemplo:
-    python ver_contenido.py "C:\\Projects\\smidocs.root\\manual.pdf"
+    python ver_contenido.py "C:\\Projects\\docs.root\\manual.pdf"
 """
 
 import os
@@ -91,7 +91,7 @@ def main():
     if len(sys.argv) < 2:
         print("Uso: python ver_contenido.py <ruta_del_archivo>")
         print("\nEjemplo:")
-        print('  python ver_contenido.py "C:\\Projects\\smidocs.root\\manual.pdf"')
+        print('  python ver_contenido.py "C:\\Projects\\docs.root\\manual.pdf"')
         print('  python ver_contenido.py manual.pdf')
         sys.exit(1)
     
