@@ -9,8 +9,8 @@
 ## Configuración Esencial (.env)
 ```
 GEMINI_API_KEY=...
-DB_PATH=smidocs_db            # Ruta (relativa o absoluta) donde persiste Chroma
-DOCS_PATH=smidocs              # Carpeta base con PDFs/HTML a indexar
+DB_PATH=docs_db            # Ruta (relativa o absoluta) donde persiste Chroma
+DOCS_PATH=docs              # Carpeta base con PDFs/HTML a indexar
 ROOT_FOLDER=                   # Subcarpeta opcional dentro de DOCS_PATH para restringir ingesta
 IA_SERVICE=gemini|ollama      # Controla si las imágenes se describen con Gemini u Ollama
 OLLAMA_URL=http://...         # Solo si IA_SERVICE=ollama
@@ -18,12 +18,12 @@ OLLAMA_MODEL=llama2           # Modelo utilizado por Ollama para describir imág
 GEMINI_MODEL_QUERY=gemini-2.5-flash   # Modelo Gemini para responder consultas
 GEMINI_MODEL_IMAGE=gemini-2.0-flash   # Modelo Gemini para describir imágenes en ingesta
 SYSTEM_PROMPT_FILE=system_prompt.txt  # Archivo con instrucciones del asistente (opcional)
-SMIRAG_DISABLE_SPACY=0        # Desactivar spaCy para lematización (1/true/yes/on)
-SMIRAG_MAX_CONVERSATION_CHARS=4000  # Máximo caracteres de historial conversacional en prompt
-SMIRAG_DEBUG_RESPONSES=0      # Modo debug: found siempre True, incluye debug_info en respuesta (1/true/yes/on)
+RAG_DISABLE_SPACY=0        # Desactivar spaCy para lematización (1/true/yes/on)
+RAG_MAX_CONVERSATION_CHARS=4000  # Máximo caracteres de historial conversacional en prompt
+RAG_DEBUG_RESPONSES=0      # Modo debug: found siempre True, incluye debug_info en respuesta (1/true/yes/on)
 RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (false=omitir, ahorra coste Gemini/Ollama)
 ```
-- Las rutas relativas se resuelven desde la raíz del repo (`c:\Projects\smirag`).
+- Las rutas relativas se resuelven desde la raíz del repo (`c:\Projects\rag`).
 - Cada agente puede definir un `.env.<COMPUTERNAME>` (por ejemplo `.env.ONLINE1`, `.env.PCFitxatge`) para sobreescribir valores locales; el loader (`env_loader.py`) intenta `.env`, luego `.env.<COMPUTERNAME>` (ignorando mayúsculas) y aplica override.
 - Sin `GEMINI_API_KEY` las descripciones de imágenes se omiten; el flujo de texto sigue funcionando.
 - **Defaults si no hay `.env`**: `DB_PATH=chroma_db_manuales`, `DOCS_PATH=manuales`, `GEMINI_MODEL_QUERY=gemini-2.5-flash`, `GEMINI_MODEL_IMAGE=gemini-2.0-flash`, `IA_SERVICE=gemini`, `OLLAMA_MODEL=llama2`.
@@ -42,7 +42,7 @@ RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (fa
 - `consulta.py` ofrece CLI de preguntas/respuestas sobre el vectorstore persistido.
 - `endpoint.py` expone FastAPI con `/consulta`, `/estructura`, `/ingesta/sync` y `/documentos`.
 - `system_prompt.txt`: instrucciones del asistente (terminología, saludos, idioma, desambiguación).
-- `smidocs_chroma_dev_database/` mantiene la base Chroma de desarrollo (incluye `chroma.sqlite3`).
+- `docs_chroma_dev_database/` mantiene la base Chroma de desarrollo (incluye `chroma.sqlite3`).
 
 ## Pipelines Clave
 - **Ingesta** (`ingesta/chroma_sync.py`):
@@ -63,7 +63,7 @@ RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (fa
   - `/documentos`: listado detallado de documentos indexados (metadatos, número de chunks, filtro `carpeta`, `limit`).
   - `/documentos/detalle`: texto completo (todos los chunks concatenados, ordenados por página) de un documento identificado por `ruta` exacta. Devuelve 404 si no se encuentra.
   - Carga `system_prompt.txt` al iniciar para personalizar respuestas del asistente.
-  - **Contexto conversacional**: se envía en el prompt para coherencia, pero NO se usa para búsqueda vectorial. Máximo controlado por `SMIRAG_MAX_CONVERSATION_CHARS` (default 4000, cap 20000).
+  - **Contexto conversacional**: se envía en el prompt para coherencia, pero NO se usa para búsqueda vectorial. Máximo controlado por `RAG_MAX_CONVERSATION_CHARS` (default 4000, cap 20000).
   - **Filtrado de keywords post-retrieval**: los keywords para scoring/filtro se extraen del query original (con `_strip_accents`), NO del query expandido, para evitar inflación de umbral. La query expandida solo se usa para la búsqueda vectorial (similarity search).
   - **Stopwords ampliadas**: incluyen verbos modales/interrogativos (`debo`, `saber`, `puedo`, `quiero`, `necesito`, `explicar`, `indicar`, `ayudar`, etc.) que no aportan al matching con documentos técnicos.
   - El umbral `is_strong` está capeado a **máximo 3** matches independientemente del número de keywords, evitando que queries con muchos términos descarten chunks relevantes.
@@ -94,7 +94,7 @@ RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (fa
 3. **Levantar API FastAPI**
    - Requiere vectorstore listo y `.env` configurado.
    - Arranca con `uvicorn endpoint:app --host 0.0.0.0 --port 8888 --reload`.
-   - Producción: `start.bat` / `stop.bat` (hardcoded a `D:\smidocs`, puerto 8888).
+   - Producción: `start.bat` / `stop.bat` (hardcoded a `D:\docs`, puerto 8888).
 4. **Respaldar base Chroma**
    - `python backup_and_recreate_chroma.py` mueve el directorio actual y crea uno limpio.
 
@@ -107,7 +107,7 @@ RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (fa
 - `inspect_source_chunks.py`: inspecciona chunks específicos de una fuente indexada.
 - `ver_contenido.py`: muestra el contenido indexado de un archivo específico en Chroma.
 - `batch_prompt_eval.py`: evaluación batch de prompts contra el vectorstore.
-- `start.bat` / `stop.bat`: scripts para iniciar/detener el servidor uvicorn en producción (puerto 8888, `D:\smidocs`).
+- `start.bat` / `stop.bat`: scripts para iniciar/detener el servidor uvicorn en producción (puerto 8888, `D:\docs`).
 
 ## Dependencias
 - Ver `requirements.txt`. Núcleo: LangChain 0.2.x, Chroma 0.4.x, PyMuPDF 1.23.x, Google Generative AI 0.7.x.
@@ -122,7 +122,7 @@ RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (fa
 - **Stopwords modales**: verbos como `debo`, `puedo`, `quiero`, `saber`, `necesito`, `explicar`, `indicar`, `ayudar` están en STOPWORDS para evitar que inflen keywords sin aportar relevancia al matching con documentos técnicos.
 - **Caché de descripciones de imágenes**: `image_descriptions.py` mantiene caché en memoria por SHA1 del base64. Imágenes idénticas (logos, cabeceras) se describen una sola vez por sesión de ingesta. Usar `get_image_cache_stats()` para ver hits/misses.
 - **`consulta.py` vs `endpoint.py`**: el CLI es una herramienta básica de diagnóstico con diferencias significativas respecto al endpoint (no usa system_prompt, extrae keywords del query expandido, no capea `is_strong`, no tiene detección de saludos ni conversación). Para producción, usar siempre el endpoint.
-- **`SMIRAG_MAX_CONVERSATION_CHARS`** (no `TURNS`): controla caracteres de historial. Los `.env` actuales definen `SMIRAG_MAX_CONVERSATION_TURNS` que no tiene efecto; corregir a `_CHARS`.
+- **`RAG_MAX_CONVERSATION_CHARS`** (no `TURNS`): controla caracteres de historial. Los `.env` actuales definen `RAG_MAX_CONVERSATION_TURNS` que no tiene efecto; corregir a `_CHARS`.
 - Chroma usa rutas normalizadas; mover manuales sin reindexar deja entradas huérfanas hasta la próxima sincronización.
 - Gemini genera costos por descripción de imágenes; si no es necesario, omite `GEMINI_API_KEY` o cambia `IA_SERVICE` a `ollama`. La caché por hash reduce drásticamente llamadas para logos repetidos.
 - `endpoint.py` mantiene objetos globales; tras sincronización externa puede ser necesario reiniciar el proceso o usar `/ingesta/sync`.
@@ -136,6 +136,6 @@ RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (fa
 2. Ejecutar `python listado.py` para confirmar contenido actual del vectorstore.
 3. Realizar una sincronización de prueba con un manual pequeño y ver registros en consola.
 4. Añadir pruebas o monitoreo para `/consulta` según necesidades del equipo.
-5. Corregir `SMIRAG_MAX_CONVERSATION_TURNS` → `SMIRAG_MAX_CONVERSATION_CHARS` en los archivos `.env`.
+5. Corregir `RAG_MAX_CONVERSATION_TURNS` → `RAG_MAX_CONVERSATION_CHARS` en los archivos `.env`.
 6. Corregir `consulta.py`: pasar `system_prompt` al template y capear `is_strong`.
 7. ~~Corregir `_refresh_vectorstore()`: usar `RETRIEVAL_K` en vez de `k=3`.~~ Corregido.

@@ -21,7 +21,7 @@ INGESTA_NOTIFY_URL = os.environ.get("SMIRAG_INGESTA_NOTIFY_URL", "").strip()
 
 
 def _notify_ingesta(folder: str, documentos: list, eliminados: list) -> None:
-    """Envía notificación POST a smi_api con los documentos procesados y eliminados."""
+    """Envía notificación POST a api con los documentos procesados y eliminados."""
     if not INGESTA_NOTIFY_URL:
         print("⚠️  SMIRAG_INGESTA_NOTIFY_URL no configurado; omitiendo notificación.")
         return
@@ -64,7 +64,7 @@ def main() -> None:
     finally:
         release_lock()
 
-    # Notificar a smi_api (fuera del lock para no bloquear)
+    # Notificar a api (fuera del lock para no bloquear)
     if processed_docs or deleted_docs:
         _notify_ingesta(
             folder=os.environ.get("DOCS_PATH", "manuales"),

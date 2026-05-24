@@ -1,4 +1,4 @@
-# SMIRAG — Sistema RAG para Manuales Técnicos
+# RAG — Sistema RAG para Manuales Técnicos
 
 Pipeline RAG económico y multimodal para manuales técnicos (PDF/HTML) con embeddings locales (HuggingFace), vectorstore Chroma y generación con Gemini Flash u Ollama.
 
@@ -33,7 +33,7 @@ Pipeline RAG económico y multimodal para manuales técnicos (PDF/HTML) con embe
 
 ```powershell
 # Clonar/descargar el proyecto
-cd C:\Projects\smirag
+cd C:\Projects\rag
 
 # Crear y activar entorno virtual
 python -m venv venv
@@ -70,8 +70,8 @@ Crear un archivo `.env` en la raíz del proyecto:
 
 ```env
 GEMINI_API_KEY=tu_clave_aqui
-DB_PATH=smidocs_db                          # Ruta donde persiste Chroma
-DOCS_PATH=smidocs                           # Carpeta base con PDFs/HTML a indexar
+DB_PATH=docs_db                          # Ruta donde persiste Chroma
+DOCS_PATH=docs                           # Carpeta base con PDFs/HTML a indexar
 ROOT_FOLDER=                                # Subcarpeta opcional para restringir ingesta
 IA_SERVICE=gemini                           # gemini | ollama
 GEMINI_MODEL_QUERY=gemini-2.5-flash         # Modelo Gemini para responder consultas
@@ -79,8 +79,8 @@ GEMINI_MODEL_IMAGE=gemini-2.0-flash         # Modelo Gemini para describir imág
 OLLAMA_URL=http://localhost:11434           # Solo si IA_SERVICE=ollama
 OLLAMA_MODEL=llama2                         # Modelo Ollama para describir imágenes
 SYSTEM_PROMPT_FILE=system_prompt.txt        # Instrucciones del asistente (opcional)
-SMIRAG_DISABLE_SPACY=0                     # 1/true/yes/on para desactivar spaCy
-SMIRAG_MAX_CONVERSATION_CHARS=4000         # Máximo de caracteres de contexto conversacional
+RAG_DISABLE_SPACY=0                     # 1/true/yes/on para desactivar spaCy
+RAG_MAX_CONVERSATION_CHARS=4000         # Máximo de caracteres de contexto conversacional
 ```
 
 Las rutas relativas se resuelven desde la raíz del repositorio.
@@ -121,7 +121,7 @@ Escribe preguntas en lenguaje natural. Comandos de salida: `salir`, `exit`, `qui
 
 ### 3. API REST (FastAPI)
 
-SMIRAG expone un servidor de aplicación ASGI (Asynchronous Server Gateway Interface): una aplicación **FastAPI** servida por **Uvicorn**.
+RAG expone un servidor de aplicación ASGI (Asynchronous Server Gateway Interface): una aplicación **FastAPI** servida por **Uvicorn**.
 
 - **FastAPI** es el framework web (define rutas, validación, serialización).
 - **Uvicorn** es el servidor ASGI que escucha en el puerto y despacha las peticiones HTTP.
@@ -130,7 +130,7 @@ SMIRAG expone un servidor de aplicación ASGI (Asynchronous Server Gateway Inter
 uvicorn endpoint:app --host 0.0.0.0 --port 8888 --reload
 ```
 
-O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D:\smidocs`).
+O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D:\docs`).
 
 #### Endpoints
 
@@ -141,7 +141,7 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
 | POST | `/ingesta/sync` | Sincronización en background con refresco del vectorstore |
 | GET | `/ingesta/pendientes` | Dry-run: lista los documentos que se procesarían en la próxima ingesta sin insertar nada |
 | GET | `/documentos` | Listado detallado de documentos indexados: metadatos, chunks, filtro por carpeta (`?carpeta=sub&limit=50`) |
-| GET | `/documentos/detalle` | Texto completo concatenado de un documento por ruta exacta (`?ruta=smidocs/manual.pdf`) |
+| GET | `/documentos/detalle` | Texto completo concatenado de un documento por ruta exacta (`?ruta=docs/manual.pdf`) |
 
 #### POST `/consulta` — Parámetros
 
@@ -150,7 +150,7 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
   "pregunta": "¿Cómo exportar tarjetas de una Forticash?",
   "rutas": ["ruta/exacta/del/pdf.pdf"],
   "root_folder": "subcarpeta",
-  "query_paths": "smi_tec_044,smi_tec_045",
+  "query_paths": "_tec_044,_tec_045",
   "conversation_id": 1,
   "conversation": [
     {"role": "user", "content": "pregunta anterior"},
@@ -172,7 +172,7 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
 ```json
 {
   "respuesta": "Para exportar tarjetas...",
-  "fuentes": ["smi_tec_044_01.pdf (fragmento: ...)"],
+  "fuentes": ["_tec_044_01.pdf (fragmento: ...)"],
   "usage": {"prompt_token_count": 1234, "candidates_token_count": 567},
   "found": true,
   "greeting": false,
@@ -195,9 +195,9 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
 {
   "documentos": [
     {
-      "ruta": "smidocs/tecnico/manual.pdf",
+      "ruta": "docs/tecnico/manual.pdf",
       "nombre": "manual.pdf",
-      "carpeta": "smidocs/tecnico",
+      "carpeta": "docs/tecnico",
       "chunks": 45,
       "hash": "a3f1c2...",
       "mtime": 1708000000.0,
@@ -226,7 +226,7 @@ Respuesta:
 
 ```json
 {
-  "carpeta": "/ruta/a/smidocs",
+  "carpeta": "/ruta/a/docs",
   "nuevos":      [{"ruta": "sub/manual.pdf", "nombre": "manual.pdf", "carpeta": "sub", "estado": "nuevo",      "hash": "a3f1c2...", "size": 204800, "mtime": 1708000000.0}],
   "modificados": [{"ruta": "sub/otro.pdf",   "nombre": "otro.pdf",   "carpeta": "sub", "estado": "modificado", "hash": "b4e2d3...", "size": 102400, "mtime": 1709000000.0}],
   "eliminados":  [{"ruta": "sub/viejo.pdf",  "nombre": "viejo.pdf",  "carpeta": "sub", "estado": "eliminado", "hash": null,       "size": null,   "mtime": null}],
@@ -341,7 +341,7 @@ Genera una versión expandida de la pregunta que se usa exclusivamente para la b
 1. **Normalización base**: minúsculas + eliminación de acentos (NFD).
 2. **Tokenización**: `\b\w+\b` extrae tokens individuales.
 3. **Stemming** (Snowball, español): reduce palabras a raíces (`configurar` → `configur`). Mínimo 3 caracteres.
-4. **Lematización** (spaCy, opcional): modelo `es_core_news_sm`. Extrae lemas (`configurando` → `configurar`). Desactivable con `SMIRAG_DISABLE_SPACY=1`.
+4. **Lematización** (spaCy, opcional): modelo `es_core_news_sm`. Extrae lemas (`configurando` → `configurar`). Desactivable con `RAG_DISABLE_SPACY=1`.
 5. **Infinitivos**: detecta conjugaciones (`-amos`, `-endo`, `-an`, `-es`…) y genera candidatos infinitivos (`-ar`, `-er`, `-ir`). Mínimo 4 caracteres.
 6. **Nominalizaciones**: de infinitivos genera sustantivos (`-ar` → `-ación`, `-amiento`, `-ador`; `-er` → `-ección`, `-imiento`; `-ir` → `-ición`, `-imiento`…). Mínimo 5 caracteres.
 7. **Ensamblaje**: concatena `[original] + [base] + [stems] + [lemas] + [infinitivos] + [nominalizaciones]`.
@@ -567,7 +567,7 @@ Prepara el texto que se enviará al LLM:
 
 **Historial conversacional** (opcional):
 - Si `req.conversation` contiene mensajes previos, se formatean como `"ROLE: contenido"` y se prepend a la pregunta.
-- Máximo `SMIRAG_MAX_CONVERSATION_CHARS` (default 4000, cap 20000) caracteres.
+- Máximo `RAG_MAX_CONVERSATION_CHARS` (default 4000, cap 20000) caracteres.
 - **Solo para coherencia y desambiguación**, NO como fuente de verdad. No se usa para la búsqueda vectorial.
 
 **Prompt final**:
@@ -607,7 +607,7 @@ Respuesta:
 4. Si produce `found: true`: reemplaza la respuesta original.
 5. Si tampoco encuentra: mantiene la respuesta original.
 
-**d) Modo debug** (`SMIRAG_DEBUG_RESPONSES=1`):
+**d) Modo debug** (`RAG_DEBUG_RESPONSES=1`):
 - Fuerza `found: true` para mostrar la respuesta real del LLM en vez de "No se encontró información".
 - Incluye `debug_info` en la respuesta con: keywords, keyword_forms, docs_retrieved, detalle por chunk (source, matches, rank, snippet).
 
@@ -629,7 +629,7 @@ Respuesta:
 | `_COMPOUND_CODE_LIMIT` | 12 | Chunks por código compuesto |
 | `_GREETING_MAX_LENGTH` | 60 | Máx. chars para detección de saludos |
 | `JACCARD_DEDUP_THRESHOLD` | 0.6 | Umbral de similitud para deduplicar |
-| `SMIRAG_MAX_CONVERSATION_CHARS` | 4000 | Máx. chars de historial conversacional |
+| `RAG_MAX_CONVERSATION_CHARS` | 4000 | Máx. chars de historial conversacional |
 | `is_strong` cap | 3 | Máximo keyword matches requeridos |
 
 ---

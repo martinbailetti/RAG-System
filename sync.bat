@@ -1,5 +1,5 @@
 @echo off
-REM filepath: c:\Projects\smirag\sync.bat
+REM filepath: c:\Projects\rag\sync.bat
 echo ===================================
 echo   Sincronizacion diaria de manuales
 echo ===================================

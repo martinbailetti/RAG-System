@@ -1,4 +1,4 @@
-"""Módulo centralizado de logging para smirag.
+"""Módulo centralizado de logging para rag.
 
 Uso desde cualquier módulo:
     from app_logging import logger
@@ -10,11 +10,11 @@ Uso desde cualquier módulo:
 
 El log se escribe a:
   - Consola (stdout) — siempre
-  - Archivo  smirag.log  — siempre (rotación automática a 5 MB, máx. 3 backups)
+  - Archivo  rag.log  — siempre (rotación automática a 5 MB, máx. 3 backups)
 
 Variables de entorno:
   SMIRAG_LOG_LEVEL   = DEBUG | INFO (default) | WARNING | ERROR
-  SMIRAG_LOG_FILE    = ruta del archivo (default: smirag.log en raíz del proyecto)
+  SMIRAG_LOG_FILE    = ruta del archivo (default: rag.log en raíz del proyecto)
 """
 
 import logging
@@ -24,15 +24,15 @@ from logging.handlers import RotatingFileHandler
 _LOG_LEVEL = os.environ.get("SMIRAG_LOG_LEVEL", "INFO").upper()
 _LOG_FILE = os.environ.get(
     "SMIRAG_LOG_FILE",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "smirag.log"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag.log"),
 )
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB por archivo
-_BACKUP_COUNT = 3             # smirag.log.1, .2, .3
+_BACKUP_COUNT = 3             # rag.log.1, .2, .3
 
 _FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 
-logger = logging.getLogger("smirag")
+logger = logging.getLogger("rag")
 logger.setLevel(getattr(logging, _LOG_LEVEL, logging.INFO))
 
 # Evitar duplicar handlers si el módulo se reimporta (reload)

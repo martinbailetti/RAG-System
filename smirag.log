@@ -95,3 +95,24 @@
 2026-05-24 21:24:01 [INFO] smirag: Consulta: ¿cómo se pela un tomate?
 2026-05-24 21:24:01 [INFO] smirag: Keywords: ['pela', 'tomate']
 2026-05-24 21:24:02 [INFO] smirag: Resultado: found=True, docs=5, fuentes=['faqs.md', 'normativamoderniza\\pcm\\servicios administrativos pnmgp_rsgp 001-2023.pdf', 'normativamoderniza\\pcm\\nt gestión del conocimiento 2025\\6501515-norma-tecnica-para-la-gestion-del-conocimiento-21-02-25-f-f.pdf']
+2026-05-24 22:38:29 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-24 22:38:55 [INFO] smirag: ALL_SOURCES: 30 fuentes únicas indexadas.
+2026-05-24 22:38:55 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
+2026-05-24 22:39:01 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-24 22:39:08 [INFO] smirag: ALL_SOURCES: 30 fuentes únicas indexadas.
+2026-05-24 22:39:08 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
+2026-05-24 22:39:14 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-24 22:39:21 [INFO] smirag: ALL_SOURCES: 30 fuentes únicas indexadas.
+2026-05-24 22:39:21 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
+2026-05-24 22:39:59 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-24 22:40:06 [INFO] smirag: ALL_SOURCES: 30 fuentes únicas indexadas.
+2026-05-24 22:40:06 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
+2026-05-24 22:40:11 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-24 22:40:18 [INFO] smirag: ALL_SOURCES: 30 fuentes únicas indexadas.
+2026-05-24 22:40:18 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
+2026-05-24 22:40:24 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-24 22:40:31 [INFO] smirag: ALL_SOURCES: 30 fuentes únicas indexadas.
+2026-05-24 22:40:31 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.
+2026-05-24 22:40:43 [INFO] smirag: System prompt cargado (1594 caracteres)
+2026-05-24 22:40:52 [INFO] smirag: ALL_SOURCES: 30 fuentes únicas indexadas.
+2026-05-24 22:40:52 [INFO] smirag: spaCy activo: se usan lemas para normalizar las preguntas.

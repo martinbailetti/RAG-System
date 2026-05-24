@@ -199,7 +199,7 @@ if spacy is not None and not _DISABLE_SPACY:  # pragma: no cover - carga perezos
         _SPACY_NLP = spacy.load(_SPACY_MODEL_NAME, exclude=["parser", "ner", "textcat"])
         if "lemmatizer" not in _SPACY_NLP.pipe_names:  # garantía de lematización
             import logging as _logging
-            _logging.getLogger("smirag").warning(
+            _logging.getLogger("rag").warning(
                 "spaCy: modelo '%s' cargado pero sin componente 'lemmatizer' (pipes: %s). "
                 "spaCy desactivado.",
                 _SPACY_MODEL_NAME,
@@ -208,7 +208,7 @@ if spacy is not None and not _DISABLE_SPACY:  # pragma: no cover - carga perezos
             _SPACY_NLP = None
     except Exception as _spacy_exc:
         import logging as _logging
-        _logging.getLogger("smirag").warning(
+        _logging.getLogger("rag").warning(
             "spaCy: no se pudo cargar el modelo '%s': %s. "
             "Instala el modelo con: pip install https://github.com/explosion/spacy-models/releases/download/%s-3.7.0/%s-3.7.0-py3-none-any.whl",
             _SPACY_MODEL_NAME,
