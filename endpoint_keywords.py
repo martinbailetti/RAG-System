@@ -308,119 +308,133 @@ STOPWORDS = {
 # deben priorizar fuertemente documentos cuya ruta/nombre los contenga.
 # Útil para términos cortos (3 chars) o acrónimos que el modelo de embeddings
 # infrapondera pero que indican claramente el documento destino.
-PRIORITY_KEYWORDS: set[str] = {
-    "sas",
-    "soja",
-    "ticketserver",
-    "tito",
-    "aft",
-    "smc",
-    "gbg",
-    "cas",
-    "ready2b",
-    "ukbar",
-    "mdc",
-    "ccm",
-    "gistra",
-    "wigos",
-    "hitachi",
-    "ukbar",
-    "r2b",
-    "atm",
-    "orenes",
-    "aristocrat",
-    "ainsworth",
-    "puloon",
-    "bill2bill",
-    "b2b",
-    "contactless",
-    "blackjack",
-    "crane",
-    "jackpot",
-    "big7",
-    "twin",
-    "comatel",
-    "poker",
-    "raspa",
-    "nv200",
-    "dlx",
-    "bito",
-    "bingball",
-    "egasa",
-    "sign",
-    "panasonic",
-    "telegram",
-    "extrafeatures",
-    "pinpad",
-    "paytef",
-    "gli",
-    "epic",
-    "edge",
-    "custom",
-    "forwardsystems",
-    "sportium",
-    "stackar",
-    "wigos",
-    "sashub",
-    "wipe",
-    "resident",
-    "ipro",
-    "bnr"
-    
-}
-
+PRIORITY_KEYWORDS: set[str] = {}
 
 DOMAIN_SYNONYMS: dict[str, set[str]] = {
-    "borrar": {"limpiar", "eliminar", "wipe", "limpieza", "borrado", "eliminacion", "liberar"},
-    "limpiar": {"borrar", "eliminar", "wipe", "borrado", "limpieza", "liberar"},
-    "eliminar": {"borrar", "limpiar", "wipe", "borrado", "eliminacion", "liberar"},
-    "wipe": {"borrar", "limpiar", "eliminar", "limpieza", "borrado", "liberar"},
-    "limpieza": {"limpiar", "borrar", "wipe", "eliminar", "liberar"},
-    "borrado": {"borrar", "limpiar", "wipe", "eliminar", "liberar"},
-    "liberar": {"borrar", "limpiar", "wipe", "eliminar", "limpieza", "liberacion"},
-    "liberacion": {"liberar", "limpiar", "borrar", "wipe", "eliminar"},
-    "disco": {"unidad", "drive", "espacio"},
-    "unidad": {"disco", "drive", "espacio"},
-    "drive": {"disco", "unidad", "espacio"},
-    "espacio": {"disco", "unidad", "drive", "capacidad", "almacenamiento"},
-    "instalar": {"instalacion", "instalador", "setup"},
-    "instalacion": {"instalar", "instalador", "setup"},
-    "instalador": {"instalar", "instalacion", "setup"},
-    "actualizar": {"actualizacion", "update", "upgrade"},
-    "actualizacion": {"actualizar", "update", "upgrade"},
-    "configurar": {"configuracion", "config", "ajustar"},
-    "configuracion": {"configurar", "config"},
-    "error": {"fallo", "problema", "incidencia", "averia"},
-    "fallo": {"error", "problema", "incidencia"},
-    "problema": {"error", "fallo", "incidencia"},
-    "memoria": {"ram", "espacio"},
-    "descargar": {"descarga", "download"},
-    "descarga": {"descargar", "download"},
-    "reiniciar": {"reinicio", "reboot", "restart"},
-    "reinicio": {"reiniciar", "reboot", "restart"},
-    "arrancar": {"arranque", "inicio", "boot"},
-    "arranque": {"arrancar", "inicio", "boot"},
-    "carpeta": {"directorio", "folder"},
-    "directorio": {"carpeta", "folder"},
-    "pantalla": {"monitor", "display", "screen"},
-    "monitor": {"pantalla", "display", "screen"},
-    "red": {"network", "conexion", "ethernet", "wifi"},
-    "conexion": {"red", "network", "ethernet", "wifi"},
-    "impresora": {"printer", "imprimir", "impresion"},
-    "imprimir": {"impresora", "printer", "impresion"},
-    "maquina": {"ccm", "mdc", "cambio"},
-    "cambio": {"ccm", "mdc", "maquina"},
-    "ccm": {"maquina", "mdc", "cambio"},
-    "mdc": {"maquina", "ccm", "cambio"},
-    "contrasena": {"clave", "password"},
-    "clave": {"contrasena", "password"},
-    "password": {"contrasena", "clave"},
-    "magicred": {"magic"},
-    "magic": {"magicred"},
-    "entrar": {"acceder", "acceso", "entrada"},
-    "acceder": {"entrar", "acceso", "entrada"},
-    "acceso": {"entrar", "acceder", "entrada"},
-    "entrada": {"entrar", "acceder", "acceso"},
+
+    "modernizacion": {
+        "reforma del estado",
+        "modernización de la gestión pública",
+        "modernización del estado",
+        "política de modernización",
+        "política nacional de modernización",
+        "plan de modernización",
+    },
+
+    "procesos": {
+        "gxp",
+        "gestión por procesos",
+        "enfoque de procesos",
+        "gestión basada en procesos",
+    },
+
+    "arquitectura": {
+        "arquitectura de procesos",
+        "inventario de procesos",
+        "mapa de procesos",
+        "catálogo de procesos",
+    },
+
+    "operativo": {
+        "proceso operativo",
+        "proceso clave",
+        "proceso core",
+        "proceso misional",
+    },
+
+    "direccion": {
+        "proceso de dirección",
+        "proceso de gobernanza",
+        "proceso estratégico",
+    },
+
+    "apoyo": {
+        "proceso de apoyo",
+        "proceso habilitante",
+        "proceso soporte",
+    },
+
+    "servicio": {
+        "servicio al ciudadano",
+        "prestación pública",
+        "atención al usuario",
+        "atención al ciudadano",
+        "servicio público",
+    },
+
+    "niveles": {
+        "carta de servicios",
+        "nivel de servicio",
+        "sla público",
+        "acuerdo de nivel de servicio",
+    },
+
+    "reclamos": {
+        "libro de reclamaciones",
+        "queja formal",
+        "reclamo",
+        "gestión de reclamos",
+    },
+
+    "conocimiento": {
+        "gesco",
+        "gc",
+        "gestión del conocimiento",
+        "gestión del saber organizacional",
+    },
+
+    "mejora": {
+        "ciclo phva",
+        "deming",
+        "kaizen público",
+        "mejora continua",
+        "pdca",
+    },
+
+    "rectoria": {
+        "órgano rector",
+        "rectoría",
+        "autoridad técnico-normativa",
+        "ente rector",
+    },
+
+    "entidad": {
+        "entidad de la administración pública",
+        "organismo público",
+        "unidad ejecutora",
+        "entidad pública",
+    },
+
+    "servidor": {
+        "servidor civil",
+        "servidor público",
+        "trabajador del estado",
+        "funcionario público",
+    },
+
+    "tupa": {
+        "texto único de procedimientos administrativos",
+        "tarifario de trámites",
+        "procedimientos administrativos",
+    },
+
+    "rof": {
+        "reglamento de organización y funciones",
+        "estructura orgánica",
+        "ley orgánica",
+        "ley de organización y funciones",
+    },
+
+    "minedu": {
+        "ministerio de educación",
+        "sector educación",
+    },
+
+    "uom": {
+        "unidad de organización y modernización del minedu",
+        "oficina de modernización minedu",
+        "modernización minedu",
+    },
 }
 
 
