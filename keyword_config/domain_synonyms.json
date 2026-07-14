@@ -1,0 +1,108 @@
+{
+  "apoyo": [
+    "proceso de apoyo",
+    "proceso habilitante",
+    "proceso soporte"
+  ],
+  "arquitectura": [
+    "arquitectura de procesos",
+    "catálogo de procesos",
+    "inventario de procesos",
+    "mapa de procesos"
+  ],
+  "conocimiento": [
+    "gc",
+    "gesco",
+    "gestión del conocimiento",
+    "gestión del saber organizacional"
+  ],
+  "direccion": [
+    "proceso de dirección",
+    "proceso de gobernanza",
+    "proceso estratégico"
+  ],
+  "entidad": [
+    "entidad de la administración pública",
+    "entidad pública",
+    "organismo público",
+    "unidad ejecutora"
+  ],
+  "mejora": [
+    "ciclo phva",
+    "deming",
+    "kaizen público",
+    "mejora continua",
+    "pdca"
+  ],
+  "minedu": [
+    "ministerio de educación",
+    "sector educación"
+  ],
+  "modernizacion": [
+    "modernización de la gestión pública",
+    "modernización del estado",
+    "plan de modernización",
+    "política de modernización",
+    "política nacional de modernización",
+    "reforma del estado"
+  ],
+  "niveles": [
+    "acuerdo de nivel de servicio",
+    "carta de servicios",
+    "nivel de servicio",
+    "sla público"
+  ],
+  "operativo": [
+    "proceso clave",
+    "proceso core",
+    "proceso misional",
+    "proceso operativo"
+  ],
+  "procesos": [
+    "enfoque de procesos",
+    "gestión basada en procesos",
+    "gestión por procesos",
+    "gxp"
+  ],
+  "reclamos": [
+    "gestión de reclamos",
+    "libro de reclamaciones",
+    "queja formal",
+    "reclamo"
+  ],
+  "rectoria": [
+    "autoridad técnico-normativa",
+    "ente rector",
+    "rectoría",
+    "órgano rector"
+  ],
+  "rof": [
+    "estructura orgánica",
+    "ley de organización y funciones",
+    "ley orgánica",
+    "reglamento de organización y funciones"
+  ],
+  "servicio": [
+    "atención al ciudadano",
+    "atención al usuario",
+    "prestación pública",
+    "servicio al ciudadano",
+    "servicio público"
+  ],
+  "servidor": [
+    "funcionario público",
+    "servidor civil",
+    "servidor público",
+    "trabajador del estado"
+  ],
+  "tupa": [
+    "procedimientos administrativos",
+    "tarifario de trámites",
+    "texto único de procedimientos administrativos"
+  ],
+  "uom": [
+    "modernización minedu",
+    "oficina de modernización minedu",
+    "unidad de organización y modernización del minedu"
+  ]
+}
