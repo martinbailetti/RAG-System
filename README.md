@@ -79,6 +79,7 @@ GEMINI_MODEL_IMAGE=gemini-2.0-flash         # Modelo Gemini para describir imág
 OLLAMA_URL=http://localhost:11434           # Solo si IA_SERVICE=ollama
 OLLAMA_MODEL=llama2                         # Modelo Ollama para describir imágenes
 SYSTEM_PROMPT_FILE=system_prompt.txt        # Instrucciones del asistente (opcional)
+RAG_KEYWORD_CONFIG_DIR=keyword_config         # Carpeta con stopwords, sinónimos y priority keywords (opcional)
 RAG_DISABLE_SPACY=0                     # 1/true/yes/on para desactivar spaCy
 RAG_MAX_CONVERSATION_CHARS=4000         # Máximo de caracteres de contexto conversacional
 ```
@@ -86,6 +87,18 @@ RAG_MAX_CONVERSATION_CHARS=4000         # Máximo de caracteres de contexto conv
 Las rutas relativas se resuelven desde la raíz del repositorio.
 
 > **Nota sobre defaults**: sin `.env`, los valores por defecto son `DB_PATH=chroma_db_manuales`, `DOCS_PATH=manuales`, `GEMINI_MODEL_QUERY=gemini-2.5-flash`, `GEMINI_MODEL_IMAGE=gemini-2.0-flash`.
+
+### Configuración de keywords (`keyword_config/`)
+
+Los diccionarios de **stopwords**, **sinónimos de dominio** y **keywords prioritarias** viven en una carpeta de archivos JSON que el pipeline carga al arrancar (`endpoint_keywords.py`). Por defecto es `keyword_config/` en la raíz del repositorio; puedes apuntar a otra ruta con `RAG_KEYWORD_CONFIG_DIR` en el `.env` (relativa a la raíz del repo o absoluta).
+
+| Archivo | Formato | Para qué sirve |
+|---------|---------|----------------|
+| `stopwords.json` | Array de strings | Palabras que se descartan al extraer keywords del query (artículos, verbos modales, preposiciones, etc.). Evita que términos genéricos inflen el matching o el umbral `is_strong`. |
+| `domain_synonyms.json` | Objeto `{ "termino": ["sinonimo1", "sinonimo2", ...] }` | Grupos de sinónimos técnicos. Se usan para ampliar las formas de cada keyword en el matching post-retrieval y para priorizar términos de dominio frente a palabras genéricas largas. |
+| `priority_keywords.json` | Array de strings | Términos muy específicos del dominio (siglas, nombres de producto, protocolos) que el modelo de embeddings infravalora. Reciben bonus en el scoring y búsqueda directa por ruta cuando aparecen en el nombre del documento. |
+
+Los tres archivos son obligatorios: si falta alguno, el servicio no arranca. Puedes mantener un set por cliente o entorno copiando la carpeta y ajustando `RAG_KEYWORD_CONFIG_DIR` sin tocar código.
 
 ### Overrides por equipo
 
@@ -253,6 +266,10 @@ Respuesta:
 ├── sync_ingesta.py          # Script de sincronización/ingesta
 ├── env_loader.py            # Cargador .env con soporte multi-host
 ├── system_prompt.txt        # Instrucciones del asistente
+├── keyword_config/          # Stopwords, sinónimos y priority keywords (JSON; ruta configurable vía RAG_KEYWORD_CONFIG_DIR)
+│   ├── stopwords.json
+│   ├── domain_synonyms.json
+│   └── priority_keywords.json
 ├── start.bat / stop.bat     # Scripts de producción (puerto 8888)
 ├── ingesta/
 │   ├── config.py            # Configuración centralizada (env vars + defaults)
@@ -369,7 +386,7 @@ Extrae hasta **7 keywords** (`MAX_EXTRACT_KEYWORDS`) del query **original** (no 
    - Con `prioritize_length=True` (por defecto): ordena por `len(token) + 3` si el token está en `DOMAIN_SYNONYMS`. El bonus +3 evita que palabras genéricas largas desplacen a términos técnicos cortos.
    - Con `prioritize_length=False` (en retries): se mantiene orden de aparición en la pregunta del usuario.
 
-**STOPWORDS** — Categorías principales:
+**STOPWORDS** (`keyword_config/stopwords.json`) — Categorías principales:
 - Artículos/pronombres: `el`, `la`, `los`, `un`, `se`, `yo`, `usted`…
 - Verbos comunes: `es`, `son`, `ser`, `estar`, `hay`, `hacer`…
 - Preposiciones: `de`, `a`, `en`, `con`, `por`, `para`, `sin`…
@@ -396,7 +413,7 @@ Para cada keyword se genera un set de **formas variantes** usadas en el matching
 - Si la keyword o alguna forma core está en `DOMAIN_SYNONYMS`: se añaden todos los sinónimos del grupo.
 - Si contiene guión (código compuesto): se añaden las partes individuales ≥ 2 chars.
 
-**DOMAIN_SYNONYMS** — Algunos grupos:
+**DOMAIN_SYNONYMS** (`keyword_config/domain_synonyms.json`) — Algunos grupos:
 | Keyword | Sinónimos |
 |---------|-----------|
 | `borrar` | limpiar, eliminar, wipe, limpieza, borrado, liberacion |
@@ -410,7 +427,7 @@ Para cada keyword se genera un set de **formas variantes** usadas en el matching
 
 Total: ~40+ grupos de sinónimos de dominio técnico.
 
-**PRIORITY_KEYWORDS** — Términos específicos de dominio que los embeddings infravaloran:
+**PRIORITY_KEYWORDS** (`keyword_config/priority_keywords.json`) — Términos específicos de dominio que los embeddings infravaloran:
 `sas`, `soja`, `ticketserver`, `tito`, `aft`, `smc`, `gbg`, `cas`, `ready2b`, `ukbar`, `mdc`, `ccm`, `gistra`, `wigos`, `hitachi`
 
 ---

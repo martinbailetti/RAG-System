@@ -6,6 +6,8 @@ import sys
 import datetime
 import threading
 import requests as _requests
+from pathlib import Path
+from dotenv import dotenv_values
 
 # Forzar UTF-8 en stdout/stderr del proceso uvicorn para evitar UnicodeEncodeError
 # en producción (Windows) cuando los módulos de ingesta hacen print() con emojis.
@@ -94,7 +96,7 @@ from endpoint_helpers import (
 
 # ── Inicialización ──────────────────────────────────────────────────────────
 
-load_host_env()
+ACTIVE_ENV_FILE = load_host_env()
 
 # Cargar system prompt una vez al iniciar (cache)
 SYSTEM_PROMPT = load_system_prompt()
@@ -235,6 +237,25 @@ app.add_middleware(
 # ── /health ────────────────────────────────────────────────────────────────
 
 _START_TIME = datetime.datetime.now(datetime.timezone.utc)
+_ENV_EXCLUDED_KEYS = {"GEMINI_API_KEY"}
+
+
+def _effective_env_values(base_dir: Path, active_env_file: Path | None) -> dict[str, str | None]:
+    """Combina .env base con .env.<HOST> (si aplica), respetando override."""
+    merged: dict[str, str | None] = {}
+    default_env = base_dir / ".env"
+    if default_env.exists():
+        merged.update(dict(dotenv_values(default_env)))
+
+    if active_env_file and active_env_file.exists() and active_env_file != default_env:
+        merged.update(dict(dotenv_values(active_env_file)))
+
+    sanitized = {
+        key: value
+        for key, value in merged.items()
+        if key not in _ENV_EXCLUDED_KEYS
+    }
+    return dict(sorted(sanitized.items()))
 
 
 @app.get("/health")
@@ -289,6 +310,33 @@ tr:nth-child(even){{background:#f9f9f9}}</style>
 </table>
 </body></html>"""
     return HTMLResponse(content=html)
+
+
+@app.get("/config/env")
+def env_config():
+    """Devuelve el archivo .env activo, su última modificación y valores efectivos."""
+    base_dir = Path(__file__).resolve().parent
+    active_path = Path(ACTIVE_ENV_FILE) if ACTIVE_ENV_FILE else None
+    default_env = base_dir / ".env"
+
+    if active_path is None:
+        if default_env.exists():
+            active_path = default_env
+        else:
+            raise HTTPException(status_code=404, detail="No se encontró archivo .env activo.")
+
+    if not active_path.exists():
+        raise HTTPException(status_code=404, detail=f"El archivo activo no existe: {active_path}")
+
+    stat = active_path.stat()
+    modified_at = datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.timezone.utc)
+
+    return {
+        "env_file_name": active_path.name,
+        "env_file_path": str(active_path),
+        "last_modified": modified_at.isoformat(),
+        "values": _effective_env_values(base_dir, active_path),
+    }
 
 
 # ── /consulta ───────────────────────────────────────────────────────────────
