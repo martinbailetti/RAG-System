@@ -67,6 +67,8 @@ from endpoint_models import (
     IngestaStatusResponse,
     PendientesResponse,
     TreeNode,
+    FaqsResponse,
+    FaqsUpdateRequest,
 )
 from endpoint_keywords import (
     _extract_keywords,
@@ -1406,6 +1408,66 @@ def descargar_archivo(ruta: str):
         media_type=media_type,
         filename=filename,
     )
+
+
+# ── /faqs ───────────────────────────────────────────────────────────────────
+
+def _get_faqs_path() -> str:
+    """Resuelve la ruta absoluta del archivo de FAQs (DOCS_PATH + FAQS_RELATIVE_PATH)."""
+    relative_raw = (os.environ.get("FAQS_RELATIVE_PATH") or "").strip()
+    if not relative_raw:
+        raise HTTPException(status_code=503, detail="FAQS_RELATIVE_PATH no está configurado.")
+
+    # Acepta "faqs/common.md", "faqs\\common.md" o incluso
+    # valores con barra inicial ("/faqs/..." o "\\faqs\\...")
+    # tratándolos siempre como ruta relativa a DOCS_PATH.
+    relative = relative_raw.replace("\\", os.sep).replace("/", os.sep).lstrip("\\/")
+    if not relative:
+        raise HTTPException(status_code=500, detail="FAQS_RELATIVE_PATH inválido.")
+
+    candidate = os.path.normcase(os.path.normpath(os.path.join(DOCUMENTS_FOLDER, relative)))
+    docs_root = os.path.normcase(os.path.normpath(DOCUMENTS_FOLDER))
+
+    if not candidate.startswith(docs_root + os.sep) and candidate != docs_root:
+        raise HTTPException(
+            status_code=500,
+            detail="FAQS_RELATIVE_PATH inválido: debe apuntar a un archivo dentro de DOCS_PATH.",
+        )
+    return candidate
+
+
+@app.get("/faqs", response_model=FaqsResponse)
+def obtener_faqs():
+    """Lee el archivo de FAQs configurado en FAQS_RELATIVE_PATH."""
+    path = _get_faqs_path()
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="El archivo de FAQs no existe.")
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            texto = f.read()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error al leer el archivo de FAQs: {exc}") from exc
+
+    return FaqsResponse(texto=texto, ruta=path)
+
+
+@app.put("/faqs", response_model=FaqsResponse)
+def actualizar_faqs(req: FaqsUpdateRequest):
+    """Sobrescribe el archivo de FAQs con el texto recibido."""
+    path = _get_faqs_path()
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    try:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(req.texto)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error al escribir el archivo de FAQs: {exc}") from exc
+
+    logger.info("Archivo de FAQs actualizado (%d caracteres): %s", len(req.texto), path)
+    return FaqsResponse(texto=req.texto, ruta=path)
 
 
 # ── /log ────────────────────────────────────────────────

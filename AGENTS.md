@@ -3,7 +3,7 @@
 ## Propósito
 - Pipeline RAG para manuales técnicos (PDF/HTML/Markdown): embeddings locales (HuggingFace), vectorstore Chroma, generación Gemini u Ollama.
 - Enriquecimiento multimodal: descripción automática de imágenes y tablas antes de indexar.
-- Servicios: `sync_ingesta.py` (ingesta), `consulta.py` (CLI diagnóstico), `endpoint.py` (API FastAPI producción).
+- Servicios: `sync_ingesta.py` (ingesta), `endpoint.py` (API FastAPI producción).
 - `system_prompt.txt`: personaliza respuestas (saludos, terminología, desambiguación con prefijo `[ACLARACIÓN]`).
 
 ## Configuración Esencial (.env)
@@ -28,6 +28,7 @@ RAG_PORT=8888
 RAG_LOG_LEVEL=INFO                         # DEBUG | INFO | WARNING | ERROR
 RAG_LOG_FILE=rag.log
 RAG_INGESTA_NOTIFY_URL=                    # POST opcional tras ingesta con docs procesados/eliminados
+FAQS_RELATIVE_PATH=                        # Ruta relativa a DOCS_PATH del archivo de FAQs (ej. faqs.txt)
 ```
 - Rutas relativas se resuelven desde la raíz del repo.
 - Override por host: `.env.<COMPUTERNAME>` (ej. `.env.PCFitxatge`); `env_loader.py` aplica `.env` y luego el override.
@@ -44,7 +45,6 @@ endpoint_models.py       # Modelos Pydantic de request/response
 app_logging.py           # Logger centralizado (consola + rag.log con rotación)
 env_loader.py            # Cargador .env multi-host
 sync_ingesta.py          # Script CLI de sincronización incremental
-consulta.py              # CLI diagnóstico (no usar en producción)
 system_prompt.txt
 keyword_config/          # JSON de keywords (ruta configurable vía RAG_KEYWORD_CONFIG_DIR)
   stopwords.json
@@ -74,6 +74,7 @@ Cargados al arrancar por `endpoint_keywords.py`. Los tres archivos son **obligat
 | Ruta | Descripción |
 |------|-------------|
 | `GET /health` | Estado del servidor (`?type=json` para JSON) |
+| `GET /config/env` | Archivo `.env` activo, última modificación y valores efectivos (sin `GEMINI_API_KEY`) |
 | `POST /consulta` | Pipeline RAG completo |
 | `GET /estructura` | Árbol de carpetas (`base` opcional) |
 | `GET /ingesta/status` | Estado de ingesta en curso |
@@ -83,8 +84,23 @@ Cargados al arrancar por `endpoint_keywords.py`. Los tres archivos son **obligat
 | `GET /documentos` | Listado indexado (`limit`, `carpeta`, `texto`) |
 | `DELETE /documentos` | Elimina documento del índice por `ruta` |
 | `GET /documentos/detalle` | Texto completo concatenado por `ruta` |
-| `GET /documentos/archivo` | Sirve el archivo original del disco |
-| `GET /log` | Últimas líneas de `rag.log` |
+| `GET /documentos/archivo` | Descarga el archivo original del disco (`?ruta=...`) |
+| `GET /faqs` | Lee el archivo de FAQs (`FAQS_RELATIVE_PATH`) |
+| `PUT /faqs` | Sobrescribe el archivo de FAQs |
+| `GET /log` | Contenido de `rag.log` (`?tail=N` para últimas N líneas) |
+
+### Descarga de archivos (`GET /documentos/archivo`)
+- Parámetro obligatorio `ruta`: tal como aparece en `GET /documentos` (ej. `docs/tecnico/manual.pdf`).
+- Acepta ruta relativa a `DOCS_PATH` o absoluta ya indexada así.
+- **Seguridad**: la ruta resuelta debe quedar dentro de `DOCUMENTS_FOLDER`; intentos de path traversal → HTTP 403.
+- Respuesta: `FileResponse` con `Content-Disposition` y MIME según extensión (`application/octet-stream` si no se detecta).
+- Errores: 422 (sin `ruta`), 403 (fuera de `DOCS_PATH`), 404 (archivo inexistente).
+
+### Gestión de documentos indexados
+- `GET /documentos`: filtro `texto` busca en el contenido de chunks (insensible a mayúsculas/acentos).
+- `DELETE /documentos`: purga todos los chunks cuya metadata `source` coincide exactamente con `ruta`.
+- `GET /documentos/detalle`: concatena chunks ordenados por `page` + `chunk_index`.
+- `GET /documentos/archivo`: sirve el binario original en disco (no el texto indexado).
 
 **CORS**: orígenes en `ALLOWED_ORIGINS` dentro de `endpoint.py`.
 
@@ -110,14 +126,7 @@ Cargados al arrancar por `endpoint_keywords.py`. Los tres archivos son **obligat
 9. Retry pre-LLM: si <50% keywords con match → reintento por orden de aparición.
 10. Retry post-LLM: si `found=False` y LLM dice no-info → reintento completo (solo si pre-LLM no corrió).
 11. `[ACLARACIÓN]` → `needs_clarification=True`, retorno inmediato sin retries.
-
-### Consulta CLI (`consulta.py`) — solo diagnóstico
-- ⚠️ Código duplicado y desactualizado respecto al endpoint.
-- No pasa `system_prompt` al `PROMPT_TEMPLATE` (posible KeyError).
-- Extrae keywords del query **expandido** (incorrecto).
-- `is_strong` sin cap de 3; `STOPWORDS` hardcodeadas (no usa `keyword_config/`).
-- Sin saludos, conversación, retries ni augmentaciones nuevas.
-- **Producción: siempre `endpoint.py`.**
+12. Preguntas de listado de documentos (`_es_busqueda_documentos`) → `all_sources=True` en la respuesta; fuentes deduplicadas por ruta y filtradas por keywords específicas.
 
 ## Constantes Clave
 | Constante | Valor | Ubicación |
@@ -141,7 +150,6 @@ Cargados al arrancar por `endpoint_keywords.py`. Los tres archivos son **obligat
 - `ver_contenido.py`: contenido indexado de un archivo en Chroma.
 - `batch_prompt_eval.py`: evaluación batch de prompts.
 - `force_reindex.py`: purga chunks por ruta parcial para forzar reingesta.
-- `doc.py`: utilidad de inspección de Chroma.
 - `check_health.ps1`: health check contra `API_URL` del `.env`.
 - `check_versions.py`: verificación de versiones de dependencias.
 
@@ -155,7 +163,6 @@ Cargados al arrancar por `endpoint_keywords.py`. Los tres archivos son **obligat
 - **Objetos globales en endpoint**: tras sync externo usar `/ingesta/sync` o reiniciar; `_refresh_vectorstore()` recarga `ALL_SOURCES`.
 - **Mensaje obsoleto**: código referencia `ingesta_masiva.py` que no existe; usar `sync_ingesta.py`.
 - **HTML imágenes**: descarga remota con caché; límite 5 MB por imagen.
-- **`endpoint_original_backup.py`**: copia histórica; no modificar ni usar como referencia activa.
 
 ## Checklist para Nuevos Agentes
 1. Validar `.env` y disponibilidad Gemini/Ollama.
@@ -163,4 +170,4 @@ Cargados al arrancar por `endpoint_keywords.py`. Los tres archivos son **obligat
 3. Verificar contenido indexado: `GET /documentos` o `ver_contenido.py`.
 4. Sync de prueba con un manual pequeño; revisar `rag.log`.
 5. Para cambios de keywords: editar JSON en `keyword_config/` y **reiniciar** el servidor (se cargan al importar).
-6. No tocar `consulta.py` salvo que se pida explícitamente alinearlo con el endpoint.
+6. Producción: siempre `endpoint.py` (no hay CLI de consulta en el repo).
