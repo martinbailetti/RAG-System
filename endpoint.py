@@ -846,6 +846,47 @@ def obtener_estructura(base: Optional[str] = None):
     return _build_tree(target)
 
 
+def _resolve_docs_tree_root(base: Optional[str] = None) -> str:
+    """Resuelve una carpeta dentro de DOCS_PATH para construir el árbol.
+
+    - Si base es None o vacío: usa DOCS_PATH completo.
+    - Si base es relativa: se concatena a DOCS_PATH.
+    - Si base es absoluta: se valida que esté dentro de DOCS_PATH.
+    """
+    docs_root = os.path.normcase(os.path.normpath(os.path.abspath(DOCUMENTS_FOLDER)))
+
+    if not base or not base.strip():
+        return docs_root
+
+    raw_base = base.strip()
+    if os.path.isabs(raw_base):
+        candidate = os.path.normcase(os.path.normpath(os.path.abspath(raw_base)))
+    else:
+        candidate = os.path.normcase(
+            os.path.normpath(os.path.abspath(os.path.join(docs_root, raw_base)))
+        )
+
+    if not candidate.startswith(docs_root + os.sep) and candidate != docs_root:
+        raise HTTPException(status_code=403, detail="La ruta solicitada está fuera de DOCS_PATH.")
+
+    if not os.path.isdir(candidate):
+        raise HTTPException(status_code=404, detail=f"La carpeta no existe: {candidate}")
+
+    return candidate
+
+
+@app.get("/estructura/docs", response_model=TreeNode)
+def obtener_estructura_docs(base: Optional[str] = None):
+    """Retorna el árbol de carpetas dentro de DOCS_PATH.
+
+    Parámetros:
+    - base (opcional): subcarpeta dentro de DOCS_PATH para devolver un subárbol.
+      Puede enviarse como ruta relativa (recomendado) o absoluta (se valida).
+    """
+    target = _resolve_docs_tree_root(base)
+    return _build_tree(target)
+
+
 # ── /ingesta/sync ───────────────────────────────────────────────────────────
 
 # URL del endpoint de api para notificar tras ingesta (ej: http://localhost:8000/api/docs/ingesta/notify)
