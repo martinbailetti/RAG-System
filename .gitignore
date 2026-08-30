@@ -2,6 +2,7 @@
 /mydocs_chroma_dev_database
 .env.ONLINE1
 .env.PCFitxatge
+.env.DESKTOP-HCBQ1DU
 /ingesta/__pycache__
 /venv
 rag.log
