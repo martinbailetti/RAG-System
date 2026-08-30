@@ -1,8 +1,12 @@
 /__pycache__
 /mydocs_chroma_dev_database
 .env.ONLINE1
-.env.DESKTOP-HCBQ1DU
 .env.PCFitxatge
 /ingesta/__pycache__
-/ingesta/__pycache__
+/venv
 rag.log
+
+# Variables de entorno (nunca subir al repo)
+.env
+.env.*
+!.env.example

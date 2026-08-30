@@ -1,0 +1,92 @@
+{
+
+  "disco": [
+    "unidad",
+    "drive",
+    "espacio"
+  ],
+  "unidad": [
+    "disco",
+    "drive",
+    "espacio"
+  ],
+  "drive": [
+    "disco",
+    "unidad",
+    "espacio"
+  ],
+
+  "limpiar": [
+    "borrar",
+    "eliminar",
+    "wipe",
+    "borrado",
+    "limpieza",
+    "eliminacion",
+    "liberar"
+  ],
+  "borrar": [
+    "limpiar",
+    "eliminar",
+    "wipe",
+    "limpieza",
+    "borrado",
+    "eliminacion",
+    "liberar"
+  ],
+  "eliminar": [
+    "borrar",
+    "limpiar",
+    "wipe",
+    "limpieza",
+    "borrado",
+    "eliminacion",
+    "liberar"
+  ],
+  "wipe": [
+    "borrar",
+    "limpiar",
+    "eliminar",
+    "limpieza",
+    "borrado",
+    "eliminacion",
+    "liberar"
+  ],
+  "limpieza": [
+    "borrar",
+    "limpiar",
+    "eliminar",
+    "wipe",
+    "borrado",
+    "eliminacion",
+    "liberar"
+  ],
+  "borrado": [
+    "borrar",
+    "limpiar",
+    "eliminar",
+    "wipe",
+    "limpieza",
+    "eliminacion",
+    "liberar"
+  ],
+  "eliminacion": [
+    "borrar",
+    "limpiar",
+    "eliminar",
+    "wipe",
+    "limpieza",
+    "borrado",
+    "liberar"
+  ],
+  "liberar": [
+    "borrar",
+    "limpiar",
+    "eliminar",
+    "wipe",
+    "limpieza",
+    "borrado",
+    "eliminacion"
+  ]
+
+}

@@ -1,6 +1,6 @@
 # RAG — Sistema RAG para Manuales Técnicos
 
-Pipeline RAG económico y multimodal para manuales técnicos (PDF/HTML) con embeddings locales (HuggingFace), vectorstore Chroma y generación con Gemini Flash u Ollama.
+Pipeline RAG económico y multimodal para manuales técnicos (PDF/HTML/Markdown) con embeddings locales (HuggingFace), vectorstore Chroma y generación con Gemini Flash u Ollama.
 
 ## Características
 
@@ -11,8 +11,7 @@ Pipeline RAG económico y multimodal para manuales técnicos (PDF/HTML) con embe
 - **Expansión de queries**: stemming (Snowball), lematización (spaCy) y heurísticas de infinitivos/nominalizaciones para mejorar el recall en la búsqueda vectorial.
 - **Filtrado nativo Chroma por scope**: `root_folder` y `query_paths` se resuelven a filtros `$in` nativos antes de la búsqueda, garantizando que solo se accede a documentos autorizados.
 - **Filtrado post-retrieval inteligente**: keywords extraídos del query original (sin acentos, sin verbos modales) con umbral `is_strong` capeado a 3 para evitar descartar chunks relevantes.
-- **API REST** con FastAPI: consulta con contexto conversacional, estructura de documentos, sincronización en background.
-- **CLI interactivo** para consultas directas al vectorstore.
+- **API REST** con FastAPI: consulta con contexto conversacional, estructura de documentos, descarga de archivos originales, gestión de FAQs, sincronización en background.
 - **System prompt configurable** para personalizar respuestas del asistente.
 - **Marcadores `.hidden`** para excluir documentos temporalmente sin borrarlos.
 - **Detección de saludos/despedidas**: el endpoint responde automáticamente a mensajes cortos de cortesía sin activar el pipeline RAG.
@@ -79,13 +78,31 @@ GEMINI_MODEL_IMAGE=gemini-2.0-flash         # Modelo Gemini para describir imág
 OLLAMA_URL=http://localhost:11434           # Solo si IA_SERVICE=ollama
 OLLAMA_MODEL=llama2                         # Modelo Ollama para describir imágenes
 SYSTEM_PROMPT_FILE=system_prompt.txt        # Instrucciones del asistente (opcional)
+RAG_KEYWORD_CONFIG_DIR=keyword_config         # Carpeta con stopwords, sinónimos y priority keywords (opcional)
 RAG_DISABLE_SPACY=0                     # 1/true/yes/on para desactivar spaCy
 RAG_MAX_CONVERSATION_CHARS=4000         # Máximo de caracteres de contexto conversacional
+RAG_PORT=8888                           # Puerto del servidor (usado por restart interno)
+RAG_LOG_LEVEL=INFO                      # DEBUG | INFO | WARNING | ERROR
+RAG_LOG_FILE=rag.log
+RAG_INGESTA_NOTIFY_URL=                 # POST opcional tras ingesta con docs procesados/eliminados
+FAQS_RELATIVE_PATH=                     # Ruta relativa a DOCS_PATH del archivo de FAQs (ej. faqs.txt)
 ```
 
 Las rutas relativas se resuelven desde la raíz del repositorio.
 
 > **Nota sobre defaults**: sin `.env`, los valores por defecto son `DB_PATH=chroma_db_manuales`, `DOCS_PATH=manuales`, `GEMINI_MODEL_QUERY=gemini-2.5-flash`, `GEMINI_MODEL_IMAGE=gemini-2.0-flash`.
+
+### Configuración de keywords (`keyword_config/`)
+
+Los diccionarios de **stopwords**, **sinónimos de dominio** y **keywords prioritarias** viven en una carpeta de archivos JSON que el pipeline carga al arrancar (`endpoint_keywords.py`). Por defecto es `keyword_config/` en la raíz del repositorio; puedes apuntar a otra ruta con `RAG_KEYWORD_CONFIG_DIR` en el `.env` (relativa a la raíz del repo o absoluta).
+
+| Archivo | Formato | Para qué sirve |
+|---------|---------|----------------|
+| `stopwords.json` | Array de strings | Palabras que se descartan al extraer keywords del query (artículos, verbos modales, preposiciones, etc.). Evita que términos genéricos inflen el matching o el umbral `is_strong`. |
+| `domain_synonyms.json` | Objeto `{ "termino": ["sinonimo1", "sinonimo2", ...] }` | Grupos de sinónimos técnicos. Se usan para ampliar las formas de cada keyword en el matching post-retrieval y para priorizar términos de dominio frente a palabras genéricas largas. |
+| `priority_keywords.json` | Array de strings | Términos muy específicos del dominio (siglas, nombres de producto, protocolos) que el modelo de embeddings infravalora. Reciben bonus en el scoring y búsqueda directa por ruta cuando aparecen en el nombre del documento. |
+
+Los tres archivos son obligatorios: si falta alguno, el servicio no arranca. Puedes mantener un set por cliente o entorno copiando la carpeta y ajustando `RAG_KEYWORD_CONFIG_DIR` sin tocar código.
 
 ### Overrides por equipo
 
@@ -97,7 +114,7 @@ Cada estación puede crear `.env.<COMPUTERNAME>` (ej: `.env.ONLINE1`, `.env.PCFi
 
 ### 1. Ingesta de documentos
 
-Deposita PDFs/HTML en la carpeta `DOCS_PATH` y ejecuta:
+Deposita PDFs, HTML o Markdown en la carpeta `DOCS_PATH` y ejecuta:
 
 ```powershell
 python sync_ingesta.py
@@ -107,19 +124,9 @@ python sync_ingesta.py
 - Describe imágenes automáticamente según `IA_SERVICE`. Imágenes repetidas (logos) se describen solo una vez por sesión gracias a la caché por hash.
 - **Persistencia incremental**: cada batch (~150 chunks) se guarda a disco. Si se interrumpe, solo se pierde el último lote y al reiniciar se reanudan los archivos pendientes.
 - Usa marcadores `archivo.pdf.hidden` para excluir documentos sin borrarlos.
-- Dry-run disponible con `python pre_ingesta.py` (detecta cambios sin insertar).
+- Dry-run disponible con `GET /ingesta/pendientes` (detecta cambios sin insertar).
 
-### 2. Consulta interactiva (CLI)
-
-```powershell
-python consulta.py
-```
-
-Escribe preguntas en lenguaje natural. Comandos de salida: `salir`, `exit`, `quit`.
-
-> **Nota**: el CLI es una herramienta básica de diagnóstico. Para uso en producción, usar la API REST que tiene filtrado avanzado, contexto conversacional y detección de saludos.
-
-### 3. API REST (FastAPI)
+### 2. API REST (FastAPI)
 
 RAG expone un servidor de aplicación ASGI (Asynchronous Server Gateway Interface): una aplicación **FastAPI** servida por **Uvicorn**.
 
@@ -136,12 +143,21 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
+| GET | `/health` | Estado del servidor (`?type=json` para JSON) |
+| GET | `/config/env` | Archivo `.env` activo, última modificación y valores efectivos (sin `GEMINI_API_KEY`) |
 | POST | `/consulta` | Consulta RAG con filtros opcionales y contexto conversacional |
 | GET | `/estructura` | Árbol de carpetas navegable (param `base` opcional) |
+| GET | `/ingesta/status` | Indica si hay una ingesta en curso |
+| GET | `/ingesta/pendientes` | Dry-run: documentos que se procesarían en la próxima ingesta |
 | POST | `/ingesta/sync` | Sincronización en background con refresco del vectorstore |
-| GET | `/ingesta/pendientes` | Dry-run: lista los documentos que se procesarían en la próxima ingesta sin insertar nada |
-| GET | `/documentos` | Listado detallado de documentos indexados: metadatos, chunks, filtro por carpeta (`?carpeta=sub&limit=50`) |
-| GET | `/documentos/detalle` | Texto completo concatenado de un documento por ruta exacta (`?ruta=docs/manual.pdf`) |
+| POST | `/restart` | Reinicia uvicorn vía `restart.bat` |
+| GET | `/documentos` | Listado de documentos indexados (`limit`, `carpeta`, `texto`) |
+| DELETE | `/documentos` | Elimina del índice todos los chunks de un documento (`?ruta=...`) |
+| GET | `/documentos/detalle` | Texto completo concatenado de un documento (`?ruta=...`) |
+| GET | `/documentos/archivo` | Descarga el archivo original del disco (`?ruta=...`) |
+| GET | `/faqs` | Lee el archivo de FAQs configurado en `FAQS_RELATIVE_PATH` |
+| PUT | `/faqs` | Sobrescribe el archivo de FAQs |
+| GET | `/log` | Contenido de `rag.log` (`?tail=N` para últimas N líneas) |
 
 #### POST `/consulta` — Parámetros
 
@@ -176,7 +192,8 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
   "usage": {"prompt_token_count": 1234, "candidates_token_count": 567},
   "found": true,
   "greeting": false,
-  "needs_clarification": false
+  "needs_clarification": false,
+  "all_sources": false
 }
 ```
 
@@ -188,6 +205,7 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
 | `found` | bool | `true` si se encontró información relevante |
 | `greeting` | bool | `true` si el mensaje era un saludo/despedida (sin RAG) |
 | `needs_clarification` | bool | `true` si la pregunta es ambigua y el LLM pide aclaración al usuario |
+| `all_sources` | bool | `true` si la pregunta es un listado de documentos; las fuentes se deduplican por ruta |
 
 #### GET `/documentos` — Respuesta
 
@@ -213,6 +231,39 @@ O con los scripts de producción: `start.bat` / `stop.bat` (configurados para `D
 |-----------|------|-------------|
 | `limit` | int (opcional) | Número máximo de documentos a retornar |
 | `carpeta` | string (opcional) | Filtra documentos cuya carpeta contenga esta subcadena |
+| `texto` | string (opcional) | Filtra documentos con al menos un chunk cuyo contenido contenga esta subcadena |
+
+#### GET `/documentos/archivo` — Descarga de archivo original
+
+Sirve el binario del documento tal como está en disco (no el texto indexado en Chroma).
+
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `ruta` | string (obligatorio) | Ruta tal como aparece en `GET /documentos` (ej. `docs/tecnico/manual.pdf`) |
+
+- Acepta ruta relativa a `DOCS_PATH` o absoluta si así fue indexada.
+- La ruta resuelta debe estar dentro de `DOCS_PATH`; intentos de salir de esa carpeta devuelven HTTP 403.
+- Respuesta: archivo con MIME detectado por extensión (`application/octet-stream` si no se reconoce).
+- Errores: 422 (sin `ruta`), 403 (path traversal), 404 (archivo inexistente).
+
+Ejemplo: `GET /documentos/archivo?ruta=docs/tecnico/manual.pdf`
+
+#### DELETE `/documentos` — Eliminar del índice
+
+Elimina todos los chunks cuya metadata `source` coincide exactamente con la ruta indicada. No borra el archivo del disco.
+
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `ruta` | string (obligatorio) | Ruta exacta del documento en Chroma |
+
+Respuesta: `{"deleted": 45, "ruta": "docs/tecnico/manual.pdf"}`
+
+#### GET/PUT `/faqs` — Archivo de FAQs
+
+Requiere `FAQS_RELATIVE_PATH` en `.env` (ruta relativa dentro de `DOCS_PATH`, ej. `faqs.txt`).
+
+- `GET /faqs` → `{"texto": "...", "ruta": "/ruta/absoluta/faqs.txt"}`
+- `PUT /faqs` con body `{"texto": "nuevo contenido"}` → sobrescribe el archivo y devuelve la misma estructura.
 
 #### GET `/ingesta/pendientes` — Dry-run de ingesta
 
@@ -249,10 +300,13 @@ Respuesta:
 
 ```
 ├── endpoint.py              # API REST (FastAPI) — servicio principal
-├── consulta.py              # CLI interactivo (diagnóstico)
 ├── sync_ingesta.py          # Script de sincronización/ingesta
 ├── env_loader.py            # Cargador .env con soporte multi-host
 ├── system_prompt.txt        # Instrucciones del asistente
+├── keyword_config/          # Stopwords, sinónimos y priority keywords (JSON; ruta configurable vía RAG_KEYWORD_CONFIG_DIR)
+│   ├── stopwords.json
+│   ├── domain_synonyms.json
+│   └── priority_keywords.json
 ├── start.bat / stop.bat     # Scripts de producción (puerto 8888)
 ├── ingesta/
 │   ├── config.py            # Configuración centralizada (env vars + defaults)
@@ -260,6 +314,7 @@ Respuesta:
 │   ├── query_core.py        # Embeddings, expansión de queries, prompts
 │   ├── pdf_processing.py    # Extracción de texto/tablas/imágenes de PDFs
 │   ├── html_processing.py   # Extracción de texto/tablas/imágenes de HTML
+│   ├── md_processing.py     # Extracción de texto de Markdown
 │   ├── image_descriptions.py# Descripción de imágenes (Gemini/Ollama) + caché
 │   ├── image_cache.py       # Caché de imágenes remotas (HTML)
 │   └── utils.py             # Fingerprints, normalización, índices, tablas→markdown
@@ -267,7 +322,7 @@ Respuesta:
 
 ### Pipeline de ingesta
 
-1. Detecta PDFs/HTML nuevos o modificados (SHA1 + mtime + size)
+1. Detecta PDFs, HTML y Markdown nuevos o modificados (SHA1 + mtime + size)
 2. Excluye archivos con marcador `.hidden`
 3. Extrae texto página a página (PyMuPDF para PDF / BeautifulSoup para HTML)
 4. Procesa tablas (→ Markdown) y describe imágenes (Gemini/Ollama con caché por hash)
@@ -369,7 +424,7 @@ Extrae hasta **7 keywords** (`MAX_EXTRACT_KEYWORDS`) del query **original** (no 
    - Con `prioritize_length=True` (por defecto): ordena por `len(token) + 3` si el token está en `DOMAIN_SYNONYMS`. El bonus +3 evita que palabras genéricas largas desplacen a términos técnicos cortos.
    - Con `prioritize_length=False` (en retries): se mantiene orden de aparición en la pregunta del usuario.
 
-**STOPWORDS** — Categorías principales:
+**STOPWORDS** (`keyword_config/stopwords.json`) — Categorías principales:
 - Artículos/pronombres: `el`, `la`, `los`, `un`, `se`, `yo`, `usted`…
 - Verbos comunes: `es`, `son`, `ser`, `estar`, `hay`, `hacer`…
 - Preposiciones: `de`, `a`, `en`, `con`, `por`, `para`, `sin`…
@@ -396,7 +451,7 @@ Para cada keyword se genera un set de **formas variantes** usadas en el matching
 - Si la keyword o alguna forma core está en `DOMAIN_SYNONYMS`: se añaden todos los sinónimos del grupo.
 - Si contiene guión (código compuesto): se añaden las partes individuales ≥ 2 chars.
 
-**DOMAIN_SYNONYMS** — Algunos grupos:
+**DOMAIN_SYNONYMS** (`keyword_config/domain_synonyms.json`) — Algunos grupos:
 | Keyword | Sinónimos |
 |---------|-----------|
 | `borrar` | limpiar, eliminar, wipe, limpieza, borrado, liberacion |
@@ -410,7 +465,7 @@ Para cada keyword se genera un set de **formas variantes** usadas en el matching
 
 Total: ~40+ grupos de sinónimos de dominio técnico.
 
-**PRIORITY_KEYWORDS** — Términos específicos de dominio que los embeddings infravaloran:
+**PRIORITY_KEYWORDS** (`keyword_config/priority_keywords.json`) — Términos específicos de dominio que los embeddings infravaloran:
 `sas`, `soja`, `ticketserver`, `tito`, `aft`, `smc`, `gbg`, `cas`, `ready2b`, `ukbar`, `mdc`, `ccm`, `gistra`, `wigos`, `hitachi`
 
 ---
@@ -640,7 +695,6 @@ Respuesta:
 |--------|-------------|
 | `listado.py` | Lista rutas indexadas en Chroma (normalizadas) |
 | `listado_raw.py` | Lista rutas EXACTAS sin normalizar |
-| `pre_ingesta.py` | Dry-run: detecta nuevos/modificados sin insertar |
 | `debug_query.py` | Diagnóstico de recuperación vectorial |
 | `inspect_source_chunks.py` | Inspecciona chunks de una fuente |
 | `ver_contenido.py` | Muestra contenido indexado de un archivo |

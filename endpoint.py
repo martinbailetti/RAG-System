@@ -6,6 +6,8 @@ import sys
 import datetime
 import threading
 import requests as _requests
+from pathlib import Path
+from dotenv import dotenv_values
 
 # Forzar UTF-8 en stdout/stderr del proceso uvicorn para evitar UnicodeEncodeError
 # en producción (Windows) cuando los módulos de ingesta hacen print() con emojis.
@@ -65,6 +67,8 @@ from endpoint_models import (
     IngestaStatusResponse,
     PendientesResponse,
     TreeNode,
+    FaqsResponse,
+    FaqsUpdateRequest,
 )
 from endpoint_keywords import (
     _extract_keywords,
@@ -94,7 +98,7 @@ from endpoint_helpers import (
 
 # ── Inicialización ──────────────────────────────────────────────────────────
 
-load_host_env()
+ACTIVE_ENV_FILE = load_host_env()
 
 # Cargar system prompt una vez al iniciar (cache)
 SYSTEM_PROMPT = load_system_prompt()
@@ -235,6 +239,25 @@ app.add_middleware(
 # ── /health ────────────────────────────────────────────────────────────────
 
 _START_TIME = datetime.datetime.now(datetime.timezone.utc)
+_ENV_EXCLUDED_KEYS = {"GEMINI_API_KEY"}
+
+
+def _effective_env_values(base_dir: Path, active_env_file: Path | None) -> dict[str, str | None]:
+    """Combina .env base con .env.<HOST> (si aplica), respetando override."""
+    merged: dict[str, str | None] = {}
+    default_env = base_dir / ".env"
+    if default_env.exists():
+        merged.update(dict(dotenv_values(default_env)))
+
+    if active_env_file and active_env_file.exists() and active_env_file != default_env:
+        merged.update(dict(dotenv_values(active_env_file)))
+
+    sanitized = {
+        key: value
+        for key, value in merged.items()
+        if key not in _ENV_EXCLUDED_KEYS
+    }
+    return dict(sorted(sanitized.items()))
 
 
 @app.get("/health")
@@ -289,6 +312,33 @@ tr:nth-child(even){{background:#f9f9f9}}</style>
 </table>
 </body></html>"""
     return HTMLResponse(content=html)
+
+
+@app.get("/config/env")
+def env_config():
+    """Devuelve el archivo .env activo, su última modificación y valores efectivos."""
+    base_dir = Path(__file__).resolve().parent
+    active_path = Path(ACTIVE_ENV_FILE) if ACTIVE_ENV_FILE else None
+    default_env = base_dir / ".env"
+
+    if active_path is None:
+        if default_env.exists():
+            active_path = default_env
+        else:
+            raise HTTPException(status_code=404, detail="No se encontró archivo .env activo.")
+
+    if not active_path.exists():
+        raise HTTPException(status_code=404, detail=f"El archivo activo no existe: {active_path}")
+
+    stat = active_path.stat()
+    modified_at = datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.timezone.utc)
+
+    return {
+        "env_file_name": active_path.name,
+        "env_file_path": str(active_path),
+        "last_modified": modified_at.isoformat(),
+        "values": _effective_env_values(base_dir, active_path),
+    }
 
 
 # ── /consulta ───────────────────────────────────────────────────────────────
@@ -793,6 +843,47 @@ def _build_tree(root: str) -> TreeNode:
 @app.get("/estructura", response_model=TreeNode)
 def obtener_estructura(base: Optional[str] = None):
     target = base or DOCUMENTS_FOLDER
+    return _build_tree(target)
+
+
+def _resolve_docs_tree_root(base: Optional[str] = None) -> str:
+    """Resuelve una carpeta dentro de DOCS_PATH para construir el árbol.
+
+    - Si base es None o vacío: usa DOCS_PATH completo.
+    - Si base es relativa: se concatena a DOCS_PATH.
+    - Si base es absoluta: se valida que esté dentro de DOCS_PATH.
+    """
+    docs_root = os.path.normcase(os.path.normpath(os.path.abspath(DOCUMENTS_FOLDER)))
+
+    if not base or not base.strip():
+        return docs_root
+
+    raw_base = base.strip()
+    if os.path.isabs(raw_base):
+        candidate = os.path.normcase(os.path.normpath(os.path.abspath(raw_base)))
+    else:
+        candidate = os.path.normcase(
+            os.path.normpath(os.path.abspath(os.path.join(docs_root, raw_base)))
+        )
+
+    if not candidate.startswith(docs_root + os.sep) and candidate != docs_root:
+        raise HTTPException(status_code=403, detail="La ruta solicitada está fuera de DOCS_PATH.")
+
+    if not os.path.isdir(candidate):
+        raise HTTPException(status_code=404, detail=f"La carpeta no existe: {candidate}")
+
+    return candidate
+
+
+@app.get("/estructura/docs", response_model=TreeNode)
+def obtener_estructura_docs(base: Optional[str] = None):
+    """Retorna el árbol de carpetas dentro de DOCS_PATH.
+
+    Parámetros:
+    - base (opcional): subcarpeta dentro de DOCS_PATH para devolver un subárbol.
+      Puede enviarse como ruta relativa (recomendado) o absoluta (se valida).
+    """
+    target = _resolve_docs_tree_root(base)
     return _build_tree(target)
 
 
@@ -1358,6 +1449,66 @@ def descargar_archivo(ruta: str):
         media_type=media_type,
         filename=filename,
     )
+
+
+# ── /faqs ───────────────────────────────────────────────────────────────────
+
+def _get_faqs_path() -> str:
+    """Resuelve la ruta absoluta del archivo de FAQs (DOCS_PATH + FAQS_RELATIVE_PATH)."""
+    relative_raw = (os.environ.get("FAQS_RELATIVE_PATH") or "").strip()
+    if not relative_raw:
+        raise HTTPException(status_code=503, detail="FAQS_RELATIVE_PATH no está configurado.")
+
+    # Acepta "faqs/common.md", "faqs\\common.md" o incluso
+    # valores con barra inicial ("/faqs/..." o "\\faqs\\...")
+    # tratándolos siempre como ruta relativa a DOCS_PATH.
+    relative = relative_raw.replace("\\", os.sep).replace("/", os.sep).lstrip("\\/")
+    if not relative:
+        raise HTTPException(status_code=500, detail="FAQS_RELATIVE_PATH inválido.")
+
+    candidate = os.path.normcase(os.path.normpath(os.path.join(DOCUMENTS_FOLDER, relative)))
+    docs_root = os.path.normcase(os.path.normpath(DOCUMENTS_FOLDER))
+
+    if not candidate.startswith(docs_root + os.sep) and candidate != docs_root:
+        raise HTTPException(
+            status_code=500,
+            detail="FAQS_RELATIVE_PATH inválido: debe apuntar a un archivo dentro de DOCS_PATH.",
+        )
+    return candidate
+
+
+@app.get("/faqs", response_model=FaqsResponse)
+def obtener_faqs():
+    """Lee el archivo de FAQs configurado en FAQS_RELATIVE_PATH."""
+    path = _get_faqs_path()
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="El archivo de FAQs no existe.")
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            texto = f.read()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error al leer el archivo de FAQs: {exc}") from exc
+
+    return FaqsResponse(texto=texto, ruta=path)
+
+
+@app.put("/faqs", response_model=FaqsResponse)
+def actualizar_faqs(req: FaqsUpdateRequest):
+    """Sobrescribe el archivo de FAQs con el texto recibido."""
+    path = _get_faqs_path()
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    try:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(req.texto)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error al escribir el archivo de FAQs: {exc}") from exc
+
+    logger.info("Archivo de FAQs actualizado (%d caracteres): %s", len(req.texto), path)
+    return FaqsResponse(texto=req.texto, ruta=path)
 
 
 # ── /log ────────────────────────────────────────────────

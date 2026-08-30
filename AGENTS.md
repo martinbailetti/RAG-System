@@ -1,141 +1,173 @@
 # Guía Rápida para Agentes
 
-## Propósito del Proyecto
-- Pipeline RAG económico para manuales técnicos (PDF/HTML) con embeddings locales y generación en Gemini u Ollama.
+## Propósito
+- Pipeline RAG para manuales técnicos (PDF/HTML/Markdown): embeddings locales (HuggingFace), vectorstore Chroma, generación Gemini u Ollama.
 - Enriquecimiento multimodal: descripción automática de imágenes y tablas antes de indexar.
-- Servicios principales: sincronización de documentos, consulta interactiva por consola y API REST vía FastAPI.
-- System prompt configurable para personalizar respuestas del asistente (saludos, despedidas, terminología).
+- Servicios: `sync_ingesta.py` (ingesta), `endpoint.py` (API FastAPI producción).
+- `system_prompt.txt`: personaliza respuestas (saludos, terminología, desambiguación con prefijo `[ACLARACIÓN]`).
 
 ## Configuración Esencial (.env)
 ```
 GEMINI_API_KEY=...
-DB_PATH=docs_db            # Ruta (relativa o absoluta) donde persiste Chroma
-DOCS_PATH=docs              # Carpeta base con PDFs/HTML a indexar
-ROOT_FOLDER=                   # Subcarpeta opcional dentro de DOCS_PATH para restringir ingesta
-IA_SERVICE=gemini|ollama      # Controla si las imágenes se describen con Gemini u Ollama
-OLLAMA_URL=http://...         # Solo si IA_SERVICE=ollama
-OLLAMA_MODEL=llama2           # Modelo utilizado por Ollama para describir imágenes
-GEMINI_MODEL_QUERY=gemini-2.5-flash   # Modelo Gemini para responder consultas
-GEMINI_MODEL_IMAGE=gemini-2.0-flash   # Modelo Gemini para describir imágenes en ingesta
-SYSTEM_PROMPT_FILE=system_prompt.txt  # Archivo con instrucciones del asistente (opcional)
-RAG_DISABLE_SPACY=0        # Desactivar spaCy para lematización (1/true/yes/on)
-RAG_MAX_CONVERSATION_CHARS=4000  # Máximo caracteres de historial conversacional en prompt
-RAG_DEBUG_RESPONSES=0      # Modo debug: found siempre True, incluye debug_info en respuesta (1/true/yes/on)
-RAG_INCLUDE_IMAGE_DESCRIPTION=true  # Describir imágenes durante la ingesta (false=omitir, ahorra coste Gemini/Ollama)
+DB_PATH=docs_db
+DOCS_PATH=docs
+ROOT_FOLDER=                              # Subcarpeta opcional dentro de DOCS_PATH
+IA_SERVICE=gemini|ollama
+GEMINI_MODEL_QUERY=gemini-2.5-flash
+GEMINI_MODEL_IMAGE=gemini-2.0-flash
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama2
+SYSTEM_PROMPT_FILE=system_prompt.txt
+RAG_KEYWORD_CONFIG_DIR=keyword_config      # Carpeta con stopwords/sinónimos/priority keywords (JSON)
+RAG_DISABLE_SPACY=0
+RAG_SPACY_MODEL=es_core_news_sm
+RAG_MAX_CONVERSATION_CHARS=4000            # Cap máximo: 20000
+RAG_DEBUG_RESPONSES=0
+RAG_INCLUDE_IMAGE_DESCRIPTION=true
+RAG_PORT=8888
+RAG_LOG_LEVEL=INFO                         # DEBUG | INFO | WARNING | ERROR
+RAG_LOG_FILE=rag.log
+RAG_INGESTA_NOTIFY_URL=                    # POST opcional tras ingesta con docs procesados/eliminados
+FAQS_RELATIVE_PATH=                        # Ruta relativa a DOCS_PATH del archivo de FAQs (ej. faqs.txt)
 ```
-- Las rutas relativas se resuelven desde la raíz del repo (`c:\Projects\rag`).
-- Cada agente puede definir un `.env.<COMPUTERNAME>` (por ejemplo `.env.ONLINE1`, `.env.PCFitxatge`) para sobreescribir valores locales; el loader (`env_loader.py`) intenta `.env`, luego `.env.<COMPUTERNAME>` (ignorando mayúsculas) y aplica override.
-- Sin `GEMINI_API_KEY` las descripciones de imágenes se omiten; el flujo de texto sigue funcionando.
-- **Defaults si no hay `.env`**: `DB_PATH=chroma_db_manuales`, `DOCS_PATH=manuales`, `GEMINI_MODEL_QUERY=gemini-2.5-flash`, `GEMINI_MODEL_IMAGE=gemini-2.0-flash`, `IA_SERVICE=gemini`, `OLLAMA_MODEL=llama2`.
+- Rutas relativas se resuelven desde la raíz del repo.
+- Override por host: `.env.<COMPUTERNAME>` (ej. `.env.PCFitxatge`); `env_loader.py` aplica `.env` y luego el override.
+- Sin `GEMINI_API_KEY`: descripciones de imágenes omitidas; texto sigue funcionando.
+- **Defaults sin `.env`**: `DB_PATH=chroma_db_manuales`, `DOCS_PATH=manuales`, `GEMINI_MODEL_QUERY=gemini-2.5-flash`, `GEMINI_MODEL_IMAGE=gemini-2.0-flash`, `IA_SERVICE=gemini`, `OLLAMA_MODEL=llama2`.
 
 ## Estructura Relevante
-- `ingesta/` contiene la lógica reusable:
-  - `config.py`: configuración centralizada de rutas, modelos y servicios IA.
-  - `chroma_sync.py`: sincronización incremental con Chroma (batch=150, persist por lote).
-  - `query_core.py`: utilidades de consulta, embeddings, expansión de queries y prompts.
-  - `pdf_processing.py` / `html_processing.py` / `md_processing.py`: extracción de texto, tablas e imágenes (PDF/HTML) o texto plano (Markdown).
-  - `image_descriptions.py`: descripción de imágenes vía Gemini u Ollama con **caché en memoria por SHA1** (evita re-describir logos repetidos).
-  - `image_cache.py`: caché de imágenes remotas en `.ingesta_image_cache/` (para HTML).
-  - `utils.py`: utilidades comunes (fingerprints, normalización, tablas→markdown, índices).
-- `env_loader.py`: cargador de `.env` con soporte multi-host (detecta COMPUTERNAME).
-- `sync_ingesta.py` llama a `ingesta.chroma_sync.sincronizar_pdf_con_chroma` para mantener Chroma alineado con el árbol de documentos.
-- `consulta.py` ofrece CLI de preguntas/respuestas sobre el vectorstore persistido.
-- `endpoint.py` expone FastAPI con `/consulta`, `/estructura`, `/ingesta/sync` y `/documentos`.
-- `system_prompt.txt`: instrucciones del asistente (terminología, saludos, idioma, desambiguación).
-- `docs_chroma_dev_database/` mantiene la base Chroma de desarrollo (incluye `chroma.sqlite3`).
+```
+endpoint.py              # FastAPI: rutas, orquestación del pipeline de consulta
+endpoint_keywords.py     # Extracción keywords, stopwords, sinónimos (carga JSON al importar)
+endpoint_retrieval.py    # Priorización, augmentaciones, scoring de chunks
+endpoint_helpers.py      # Saludos, conversación, debug, detección no-info del LLM
+endpoint_models.py       # Modelos Pydantic de request/response
+app_logging.py           # Logger centralizado (consola + rag.log con rotación)
+env_loader.py            # Cargador .env multi-host
+sync_ingesta.py          # Script CLI de sincronización incremental
+system_prompt.txt
+keyword_config/          # JSON de keywords (ruta configurable vía RAG_KEYWORD_CONFIG_DIR)
+  stopwords.json
+  domain_synonyms.json
+  priority_keywords.json
+ingesta/
+  config.py              # Rutas, modelos, flags de ingesta
+  chroma_sync.py         # Sincronización incremental (batch=150, persist por lote)
+  query_core.py          # Embeddings, expansión de queries, prompts, system prompt
+  pdf_processing.py / html_processing.py / md_processing.py
+  image_descriptions.py  # Descripción imágenes (Gemini/Ollama) + caché SHA1 en memoria
+  image_cache.py         # Caché imágenes remotas HTML (.ingesta_image_cache/)
+  ingesta_lock.py        # Lock inter-proceso (.ingesta.lock) para evitar ingestas concurrentes
+  utils.py               # Fingerprints, normalización, índices de tokens por ruta
+```
+
+## keyword_config/ (JSON)
+Cargados al arrancar por `endpoint_keywords.py`. Los tres archivos son **obligatorios**.
+
+| Archivo | Formato | Uso |
+|---------|---------|-----|
+| `stopwords.json` | `string[]` | Palabras descartadas al extraer keywords (artículos, modales, preposiciones…). |
+| `domain_synonyms.json` | `{ "term": ["syn1", ...] }` | Sinónimos técnicos para matching post-retrieval y bonus de priorización. |
+| `priority_keywords.json` | `string[]` | Términos que embeddings infravaloran; bonus en scoring y búsqueda por ruta (`_augment_with_priority_keyword_search`). |
+
+## API (`endpoint.py`) — Endpoints
+| Ruta | Descripción |
+|------|-------------|
+| `GET /health` | Estado del servidor (`?type=json` para JSON) |
+| `GET /config/env` | Archivo `.env` activo, última modificación y valores efectivos (sin `GEMINI_API_KEY`) |
+| `POST /consulta` | Pipeline RAG completo |
+| `GET /estructura` | Árbol de carpetas (`base` opcional) |
+| `GET /ingesta/status` | Estado de ingesta en curso |
+| `GET /ingesta/pendientes` | Dry-run: nuevos/modificados/eliminados/ocultos sin tocar Chroma |
+| `POST /ingesta/sync` | Sincronización en background; 409 si ya hay ingesta; `restart` opcional (default true) |
+| `POST /restart` | Reinicia uvicorn vía `restart.bat` |
+| `GET /documentos` | Listado indexado (`limit`, `carpeta`, `texto`) |
+| `DELETE /documentos` | Elimina documento del índice por `ruta` |
+| `GET /documentos/detalle` | Texto completo concatenado por `ruta` |
+| `GET /documentos/archivo` | Descarga el archivo original del disco (`?ruta=...`) |
+| `GET /faqs` | Lee el archivo de FAQs (`FAQS_RELATIVE_PATH`) |
+| `PUT /faqs` | Sobrescribe el archivo de FAQs |
+| `GET /log` | Contenido de `rag.log` (`?tail=N` para últimas N líneas) |
+
+### Descarga de archivos (`GET /documentos/archivo`)
+- Parámetro obligatorio `ruta`: tal como aparece en `GET /documentos` (ej. `docs/tecnico/manual.pdf`).
+- Acepta ruta relativa a `DOCS_PATH` o absoluta ya indexada así.
+- **Seguridad**: la ruta resuelta debe quedar dentro de `DOCUMENTS_FOLDER`; intentos de path traversal → HTTP 403.
+- Respuesta: `FileResponse` con `Content-Disposition` y MIME según extensión (`application/octet-stream` si no se detecta).
+- Errores: 422 (sin `ruta`), 403 (fuera de `DOCS_PATH`), 404 (archivo inexistente).
+
+### Gestión de documentos indexados
+- `GET /documentos`: filtro `texto` busca en el contenido de chunks (insensible a mayúsculas/acentos).
+- `DELETE /documentos`: purga todos los chunks cuya metadata `source` coincide exactamente con `ruta`.
+- `GET /documentos/detalle`: concatena chunks ordenados por `page` + `chunk_index`.
+- `GET /documentos/archivo`: sirve el binario original en disco (no el texto indexado).
+
+**CORS**: orígenes en `ALLOWED_ORIGINS` dentro de `endpoint.py`.
 
 ## Pipelines Clave
-- **Ingesta** (`ingesta/chroma_sync.py`):
-  - Detecta PDFs/HTML/Markdown nuevos o modificados usando huellas SHA1+mtime+size.
-  - Soporta marcadores `.hidden` para excluir documentos temporalmente.
-  - Procesa tablas (`pdf_processing.py` / `html_processing.py`) y describe imágenes vía `image_descriptions.py` (con caché por hash para no re-describir logos).
-  - Divide contenido con `RecursiveCharacterTextSplitter` (chunk_size=1500, overlap=300) y persiste en Chroma usando embeddings HuggingFace (`paraphrase-multilingual-mpnet-base-v2`).
-  - **Persistencia por lote**: `MAX_CHROMA_BATCH=150`, se llama `_safe_persist()` después de cada batch. Si se interrumpe, solo se pierde el último lote.
-- **Consulta CLI** (`consulta.py`):
-  - Herramienta básica de diagnóstico. Usa `RETRIEVAL_K=3`, sin `MAX_CONTEXT_DOCS`.
-  - ⚠️ **Bug conocido**: no pasa `system_prompt` al `PROMPT_TEMPLATE` (posible KeyError). Tampoco capea `is_strong`.
-  - Extrae keywords del query expandido (diferente del endpoint que usa el original).
-- **API** (`endpoint.py`):
-  - `/consulta`: filtros opcionales por `rutas`, `root_folder`, `query_paths`; incluye detección automática de saludos/despedidas (regex, ≤60 chars).
-  - **Filtrado nativo Chroma por scope**: `root_folder` y `query_paths` se resuelven al startup a filtros `$in` nativos usando `ALL_SOURCES` (set de fuentes únicas del vectorstore). Chroma solo busca en documentos autorizados, no en toda la base. Las augmentaciones también reciben `allowed_sources` para restringir sus búsquedas.
-  - `/estructura`: árbol de carpetas navegable para frontends (param `base` opcional).
-  - `/ingesta/sync`: ejecuta sincronización en background y refresca el vectorstore.
-  - `/documentos`: listado detallado de documentos indexados (metadatos, número de chunks, filtro `carpeta`, `limit`).
-  - `/documentos/detalle`: texto completo (todos los chunks concatenados, ordenados por página) de un documento identificado por `ruta` exacta. Devuelve 404 si no se encuentra.
-  - Carga `system_prompt.txt` al iniciar para personalizar respuestas del asistente.
-  - **Contexto conversacional**: se envía en el prompt para coherencia, pero NO se usa para búsqueda vectorial. Máximo controlado por `RAG_MAX_CONVERSATION_CHARS` (default 4000, cap 20000).
-  - **Filtrado de keywords post-retrieval**: los keywords para scoring/filtro se extraen del query original (con `_strip_accents`), NO del query expandido, para evitar inflación de umbral. La query expandida solo se usa para la búsqueda vectorial (similarity search).
-  - **Stopwords ampliadas**: incluyen verbos modales/interrogativos (`debo`, `saber`, `puedo`, `quiero`, `necesito`, `explicar`, `indicar`, `ayudar`, etc.) que no aportan al matching con documentos técnicos.
-  - El umbral `is_strong` está capeado a **máximo 3** matches independientemente del número de keywords, evitando que queries con muchos términos descarten chunks relevantes.
-  - `MAX_CONTEXT_DOCS = 5`: el LLM recibe hasta 5 fragmentos de contexto.
-  - `RETRIEVAL_K = 20` (búsqueda inicial), `FALLBACK_K = 150` (ampliada si faltan docs "strong").
-  - **Retry pre-LLM** (cobertura): si menos del 50% de las keywords tienen match en algún doc recuperado, se reintenta con keywords por orden de aparición (en vez de por longitud+dominio). Evita enviar docs off-topic al LLM.
-  - **Retry post-LLM** (`found=False`): si el LLM indica que no tiene información (`_NO_INFO_REGEXES`), se reintenta la búsqueda completa con keywords por orden de aparición y se vuelve a llamar al LLM. Solo se ejecuta si el retry pre-LLM no se ejecutó ya. Si el retry tampoco produce `found=True`, se mantiene la respuesta original.
-  - **Desambiguación (needs_clarification)**: el system prompt instruye al LLM a prefixar su respuesta con `[ACLARACIÓN]` cuando la pregunta es ambigua y el contexto contiene múltiples opciones. `check_clarification()` en `endpoint_helpers.py` detecta el prefijo, lo elimina del texto y activa `needs_clarification=True` en `ConsultaResponse`. Cuando se detecta, se retorna inmediatamente con `found=True` sin ejecutar retries post-LLM. El frontend usa el campo booleano para renderizar la pregunta de forma distinta.
 
-## Constantes clave (endpoint.py)
-| Constante | Valor | Descripción |
-|-----------|-------|-------------|
-| `RETRIEVAL_K` | 20 | Docs recuperados en búsqueda inicial |
-| `FALLBACK_K` | 150 | Docs en búsqueda ampliada |
-| `MAX_CONTEXT_DOCS` | 5 | Fragmentos enviados al LLM |
-| `TARGET_KEYWORD_DOCS` | 3 | Mínimo docs "strong" deseados antes de fallback |
-| `is_strong` cap | 3 | Máximo keyword matches requeridos |
-| `_GREETING_MAX_LENGTH` | 60 | Máximo chars para detección de saludos |
+### Ingesta (`ingesta/chroma_sync.py`)
+- Detecta PDF/HTML/Markdown nuevos o modificados (SHA1 + mtime + size).
+- Marcadores `.hidden` excluyen documentos temporalmente.
+- Chunking: `RecursiveCharacterTextSplitter` (1500/300). Embeddings: `paraphrase-multilingual-mpnet-base-v2`.
+- Persistencia por lote (`MAX_CHROMA_BATCH=150`); si se interrumpe, solo se pierde el último lote.
+- Lock: `ingesta_lock.py` (entre procesos) + `_ingesta_lock` threading (en `/ingesta/sync`).
+- Tras sync con cambios: notificación opcional (`RAG_INGESTA_NOTIFY_URL`) y reinicio automático del servidor (salvo `restart=false`).
+
+### Consulta API (`endpoint.py` + módulos `endpoint_*`)
+1. Saludos/despedidas (regex, ≤60 chars) → respuesta enlatada sin RAG.
+2. Query expandida (`normalize_and_expand_query`) → **solo** similarity search.
+3. Keywords del query **original** (`_extract_keywords`, máx. 7) → scoring/filtro post-retrieval.
+4. Filtro nativo Chroma `$in` por `root_folder`/`query_paths` vía `ALL_SOURCES`.
+5. Búsqueda inicial `RETRIEVAL_K=20`; fallback `FALLBACK_K=150` si faltan docs "strong".
+6. Augmentaciones (con `allowed_sources`): source candidates, códigos compuestos (`$contains`), priority keywords en ruta, búsqueda literal de último recurso.
+7. `_prioritize_docs`: `is_strong` capeado a **máx. 3** matches; scoring con densidad de contenido útil, calidad de match y bonus priority.
+8. Contexto al LLM: hasta `MAX_CONTEXT_DOCS=5`. Conversación en prompt (no en búsqueda), cap `RAG_MAX_CONVERSATION_CHARS`.
+9. Retry pre-LLM: si <50% keywords con match → reintento por orden de aparición.
+10. Retry post-LLM: si `found=False` y LLM dice no-info → reintento completo (solo si pre-LLM no corrió).
+11. `[ACLARACIÓN]` → `needs_clarification=True`, retorno inmediato sin retries.
+12. Preguntas de listado de documentos (`_es_busqueda_documentos`) → `all_sources=True` en la respuesta; fuentes deduplicadas por ruta y filtradas por keywords específicas.
+
+## Constantes Clave
+| Constante | Valor | Ubicación |
+|-----------|-------|-----------|
+| `RETRIEVAL_K` | 20 | `endpoint.py` |
+| `FALLBACK_K` | 150 | `endpoint.py` |
+| `MAX_CONTEXT_DOCS` | 5 | `endpoint.py` |
+| `TARGET_KEYWORD_DOCS` | 3 | `endpoint.py` |
+| `MAX_EXTRACT_KEYWORDS` | 7 | `endpoint_keywords.py` |
+| `is_strong` cap | 3 | `endpoint_retrieval.py` |
+| `_GREETING_MAX_LENGTH` | 60 | `endpoint_helpers.py` |
 
 ## Flujos Operativos
-1. **Actualizar manuales**
-   - Deposita nuevos PDFs/HTML en `DOCS_PATH`.
-   - Ejecuta `python sync_ingesta.py` (PowerShell) para reindexar. Usa Gemini u Ollama según `IA_SERVICE`.
-   - Dry-run disponible con `python pre_ingesta.py`.
-2. **Consultar manuales**
-   - `python consulta.py` inicia modo interactivo.
-   - Comandos de salida: `salir`, `exit` o `quit`.
-3. **Levantar API FastAPI**
-   - Requiere vectorstore listo y `.env` configurado.
-   - Arranca con `uvicorn endpoint:app --host 0.0.0.0 --port 8888 --reload`.
-   - Producción: `start.bat` / `stop.bat` (hardcoded a `D:\docs`, puerto 8888).
-4. **Respaldar base Chroma**
-   - `python backup_and_recreate_chroma.py` mueve el directorio actual y crea uno limpio.
+1. **Indexar**: depositar docs en `DOCS_PATH` → `python sync_ingesta.py` (o `POST /ingesta/sync`).
+2. **Consultar**: `uvicorn endpoint:app --host 0.0.0.0 --port 8888` (puerto configurable con `RAG_PORT`).
+3. **Dry-run ingesta**: `GET /ingesta/pendientes` (API) — no existe `pre_ingesta.py` en el repo.
+4. **Forzar reindexado**: `python force_reindex.py <fragmento_ruta>` elimina chunks y deja que sync los reingeste.
+5. **Producción Windows**: `start.bat` / `stop.bat` / `restart.bat` (puerto 8888 hardcoded en .bat).
 
-## Utilidades Complementarias
-- `listado.py`: lista rutas únicas actualmente indexadas en Chroma (normalizadas).
-- `listado_raw.py`: lista rutas EXACTAS tal como están almacenadas (sin normalizar).
-- `tools_test_ollama.py`: smoke test de disponibilidad y respuesta del servidor Ollama.
-- `pre_ingesta.py`: replica la detección de documentos nuevos/modificados SIN insertar en Chroma (dry-run).
-- `debug_query.py`: diagnóstico detallado de recuperación vectorial para comparar entre PCs.
-- `inspect_source_chunks.py`: inspecciona chunks específicos de una fuente indexada.
-- `ver_contenido.py`: muestra el contenido indexado de un archivo específico en Chroma.
-- `batch_prompt_eval.py`: evaluación batch de prompts contra el vectorstore.
-- `start.bat` / `stop.bat`: scripts para iniciar/detener el servidor uvicorn en producción (puerto 8888, `D:\docs`).
+## Utilidades Existentes
+- `ver_contenido.py`: contenido indexado de un archivo en Chroma.
+- `batch_prompt_eval.py`: evaluación batch de prompts.
+- `force_reindex.py`: purga chunks por ruta parcial para forzar reingesta.
+- `check_health.ps1`: health check contra `API_URL` del `.env`.
+- `check_versions.py`: verificación de versiones de dependencias.
 
-## Dependencias
-- Ver `requirements.txt`. Núcleo: LangChain 0.2.x, Chroma 0.4.x, PyMuPDF 1.23.x, Google Generative AI 0.7.x.
-- Dependencias opcionales: `spacy>=3.7.0` (lematización española), `snowballstemmer` (stemming).
-- ⚠️ `uvicorn` no está en `requirements.txt`; debe instalarse aparte.
-- Ejecutar `pip install -r requirements.txt` en un entorno Python 3.9+ (Windows 11).
+## Gotchas Críticos
+- **Keywords vs expansión**: nunca extraer keywords del query expandido; infla `is_strong` y descarta chunks relevantes.
+- **Códigos con guión** (`PNM-P01`): preservados enteros; partes como formas; `_augment_with_compound_code_search` con `$contains`.
+- **Priorización**: candidatos ordenados por `len(token) + 3` si están en `DOMAIN_SYNONYMS`.
+- **Caché imágenes ingesta**: SHA1 en memoria por sesión; logos repetidos se describen una vez.
+- **`RAG_MAX_CONVERSATION_CHARS`** (no `TURNS`): `RAG_MAX_CONVERSATION_TURNS` en `.env` no tiene efecto.
+- **Chroma rutas normalizadas**: mover manuales sin reindexar deja huérfanos hasta próximo sync.
+- **Objetos globales en endpoint**: tras sync externo usar `/ingesta/sync` o reiniciar; `_refresh_vectorstore()` recarga `ALL_SOURCES`.
+- **Mensaje obsoleto**: código referencia `ingesta_masiva.py` que no existe; usar `sync_ingesta.py`.
+- **HTML imágenes**: descarga remota con caché; límite 5 MB por imagen.
 
-## Consideraciones y Gotchas
-- **Keyword extraction vs query expansion**: `_extract_keywords` se ejecuta sobre el query original (sin acentos) para obtener hasta `MAX_EXTRACT_KEYWORDS` (7) keywords; `_keyword_forms` ya genera variantes morfológicas (singular/plural, quita sufijos) y expande con `DOMAIN_SYNONYMS`. La query expandida (`normalize_and_expand_query`) con stems/lemas/nominalizaciones solo alimenta el similarity search de Chroma. No mezclar ambos flujos: extraer keywords del query expandido infla el umbral de `is_strong` y descarta chunks relevantes.
-- **Códigos compuestos con guión**: `_extract_keywords` detecta patrones alfanuméricos con guiones (ej. `PNM-P01`, `BNR-S01`) y los preserva como keywords completas. Sin esto, `\w+` rompe el código en partes de < 4 chars que se descartan. `_keyword_forms` añade las partes individuales como formas para el matching por source tokens. Además, `_augment_with_compound_code_search` busca estos códigos directamente en Chroma con `$contains` cuando la búsqueda vectorial no los encuentra (el modelo de embeddings no da suficiente peso a tokens alfanuméricos cortos).
-- **Priorización de keywords**: cuando hay más candidatas que `MAX_EXTRACT_KEYWORDS`, se ordenan por `len(token) + 3` si el token está en `DOMAIN_SYNONYMS` (bonus dominio). Esto evita que palabras largas genéricas (ej. "insuficiente") desplacen a términos técnicos cortos pero específicos (ej. "borrar", "disco", "memoria").
-- **Stopwords modales**: verbos como `debo`, `puedo`, `quiero`, `saber`, `necesito`, `explicar`, `indicar`, `ayudar` están en STOPWORDS para evitar que inflen keywords sin aportar relevancia al matching con documentos técnicos.
-- **Caché de descripciones de imágenes**: `image_descriptions.py` mantiene caché en memoria por SHA1 del base64. Imágenes idénticas (logos, cabeceras) se describen una sola vez por sesión de ingesta. Usar `get_image_cache_stats()` para ver hits/misses.
-- **`consulta.py` vs `endpoint.py`**: el CLI es una herramienta básica de diagnóstico con diferencias significativas respecto al endpoint (no usa system_prompt, extrae keywords del query expandido, no capea `is_strong`, no tiene detección de saludos ni conversación). Para producción, usar siempre el endpoint.
-- **`RAG_MAX_CONVERSATION_CHARS`** (no `TURNS`): controla caracteres de historial. Los `.env` actuales definen `RAG_MAX_CONVERSATION_TURNS` que no tiene efecto; corregir a `_CHARS`.
-- Chroma usa rutas normalizadas; mover manuales sin reindexar deja entradas huérfanas hasta la próxima sincronización.
-- Gemini genera costos por descripción de imágenes; si no es necesario, omite `GEMINI_API_KEY` o cambia `IA_SERVICE` a `ollama`. La caché por hash reduce drásticamente llamadas para logos repetidos.
-- `endpoint.py` mantiene objetos globales; tras sincronización externa puede ser necesario reiniciar el proceso o usar `/ingesta/sync`.
-- ⚠️ ~~`_refresh_vectorstore()` en `endpoint.py` recrea el retriever con `k=3` en vez de `RETRIEVAL_K` (20). Bug menor: solo afecta tras `/ingesta/sync`.~~ Corregido: ya no usa retriever, usa `db.similarity_search()` con `k=RETRIEVAL_K` y filtro nativo.
-- Procesamiento HTML descarga imágenes remotas (con caché ligera en `.ingesta_image_cache/`) y respeta un límite de 5 MB por imagen.
-- Sin la librería `google-generativeai` instalada, las descripciones por Gemini fallan silenciosamente; verifica logs.
-- **CORS**: solo se permiten orígenes específicos definidos en `ALLOWED_ORIGINS` dentro de `endpoint.py`.
-
-## Próximos Pasos Sugeridos para Nuevos Agentes
-1. Validar `.env` y disponibilidad de Gemini/Ollama antes de tocar la ingesta.
-2. Ejecutar `python listado.py` para confirmar contenido actual del vectorstore.
-3. Realizar una sincronización de prueba con un manual pequeño y ver registros en consola.
-4. Añadir pruebas o monitoreo para `/consulta` según necesidades del equipo.
-5. Corregir `RAG_MAX_CONVERSATION_TURNS` → `RAG_MAX_CONVERSATION_CHARS` en los archivos `.env`.
-6. Corregir `consulta.py`: pasar `system_prompt` al template y capear `is_strong`.
-7. ~~Corregir `_refresh_vectorstore()`: usar `RETRIEVAL_K` en vez de `k=3`.~~ Corregido.
+## Checklist para Nuevos Agentes
+1. Validar `.env` y disponibilidad Gemini/Ollama.
+2. Confirmar `keyword_config/` existe (o ruta en `RAG_KEYWORD_CONFIG_DIR`).
+3. Verificar contenido indexado: `GET /documentos` o `ver_contenido.py`.
+4. Sync de prueba con un manual pequeño; revisar `rag.log`.
+5. Para cambios de keywords: editar JSON en `keyword_config/` y **reiniciar** el servidor (se cargan al importar).
+6. Producción: siempre `endpoint.py` (no hay CLI de consulta en el repo).

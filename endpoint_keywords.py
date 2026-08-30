@@ -1,8 +1,16 @@
 """Extracción de keywords, stopwords y sinónimos de dominio para el pipeline RAG."""
 
+import json
+import os
 import re
 import unicodedata
+from pathlib import Path
 from typing import Optional, List, Dict, Any
+
+from app_logging import logger
+
+_KEYWORD_CONFIG_DIR = Path(__file__).resolve().parent / "keyword_config"
+_KEYWORD_CONFIG_LOADED = False
 
 
 def _strip_accents(text: str) -> str:
@@ -13,429 +21,75 @@ def _strip_accents(text: str) -> str:
 
 MAX_EXTRACT_KEYWORDS = 7
 
-
-STOPWORDS = {
-    "el",
-    "la",
-    "los",
-    "las",
-    "un",
-    "una",
-    "unos",
-    "unas",
-    "lo",
-    "al",
-    "del",
-    "de",
-    "que",
-    "y",
-    "o",
-    "u",
-    "a",
-    "en",
-    "con",
-    "por",
-    "para",
-    "como",
-    "se",
-    "es",
-    "son",
-    "ser",
-    "soy",
-    "eres",
-    "somos",
-    "estoy",
-    "estas",
-    "esta",
-    "está",
-    "están",
-    "esta",
-    "estamos",
-    "estan",
-    "hay",
-    "habia",
-    "había",
-    "tenia",
-    "tenía",
-    "tengo",
-    "tienes",
-    "tienen",
-    "hacer",
-    "hace",
-    "hacen",
-    "si",
-    "no",
-    "mas",
-    "más",
-    "menos",
-    "pero",
-    "sin",
-    "sobre",
-    "entre",
-    "cuanto",
-    "cuánto",
-    "cual",
-    "cuál",
-    "cuales",
-    "cuáles",
-    "donde",
-    "dónde",
-    "cuando",
-    "cuándo",
-    "quien",
-    "quién",
-    "quienes",
-    "quiénes",
-    "que",
-    "qué",
-    "este",
-    "esta",
-    "estos",
-    "estas",
-    "ese",
-    "esa",
-    "eso",
-    "esos",
-    "esas",
-    "aquel",
-    "aquella",
-    "aquellos",
-    "aquellas",
-    "mi",
-    "mis",
-    "tu",
-    "tus",
-    "tú",
-    "su",
-    "sus",
-    "nuestro",
-    "nuestra",
-    "nuestros",
-    "nuestras",
-    "vuestro",
-    "vuestra",
-    "vuestros",
-    "vuestras",
-    "yo",
-    "usted",
-    "ustedes",
-    "nosotros",
-    "nosotras",
-    "vosotros",
-    "vosotras",
-    "ellos",
-    "ellas",
-    "me",
-    "te",
-    "se",
-    "nos",
-    "les",
-    "le",
-    "etc",
-    "etcetera",
-    "etcétera",
-    # Verbos modales/interrogativos típicos de preguntas (no aparecen en docs técnicos)
-    "debo",
-    "deben",
-    "debemos",
-    "debe",
-    "saber",
-    "sabes",
-    "sabe",
-    "sabemos",
-    "saben",
-    "puedo",
-    "puede",
-    "pueden",
-    "podemos",
-    "quiero",
-    "quiere",
-    "quieren",
-    "queremos",
-    "necesito",
-    "necesita",
-    "necesitan",
-    "necesitamos",
-    "tengo",
-    "tener",
-    "podria",
-    "podría",
-    "seria",
-    "sería",
-    "deberia",
-    "debería",
-    "quisiera",
-    "favor",
-    "ayuda",
-    "ayudar",
-    "explicar",
-    "explica",
-    "decir",
-    "dime",
-    "indica",
-    "indicar",
-    # Indefinidos y cuantificadores (no aportan al matching técnico)
-    "alguna",
-    "alguno",
-    "algunos",
-    "algunas",
-    "algun",
-    "ninguna",
-    "ninguno",
-    "ningun",
-    "otra",
-    "otro",
-    "otros",
-    "otras",
-    "todo",
-    "toda",
-    "todos",
-    "todas",
-    "mucho",
-    "mucha",
-    "muchos",
-    "muchas",
-    "poco",
-    "poca",
-    "algo",
-    "nada",
-    "cada",
-    "mismo",
-    "misma",
-    "tambien",
-    "también",
-    "siempre",
-    "nunca",
-    # Conjugaciones faltantes de verbos ya incluidos
-    "tenemos",
-    "hacemos",
-    "hemos",
-    "sido",
-    "siendo",
-    "eran",
-    "fueron",
-    # Saludos temporales (ruido conversacional, no técnico)
-    "buenos",
-    "buenas",
-    "dias",
-    "tardes",
-    "noches",
-    "manana",
-    "mañana",
-    # Preposiciones/adverbios genéricos faltantes
-    "tras",
-    "desde",
-    "hasta",
-    "antes",
-    "despues",
-    "después",
-    "durante",
-    "mientras",
-    "dentro",
-    "fuera",
-    "aqui",
-    "aquí",
-    "alla",
-    "allí",
-    # Verbos/sustantivos genéricos que no aportan al matching técnico
-    "realizar",
-    "realiza",
-    "realizan",
-    "llegar",
-    "llega",
-    "llegan",
-    "dando",
-    "momento",
-    "tipo",
-    "forma",
-    "manera",
-    "parte",
-    "partes",
-    "cosa",
-    "cosas",
-    "veces",
-    "lado",
-    # ── Palabras cortas (3 chars) genéricas que no son términos técnicos ──
-    # Necesarias tras bajar el filtro de longitud de < 4 a < 3.
-    # Sin ellas, queries como "hay que ver" generarían keywords basura.
-    "hay",
-    "ver",
-    "fue",
-    "han",
-    "van",
-    "dar",
-    "dos",
-    "fin",
-    "vez",
-    "tan",
-    "dio",
-    "hoy",
-    "iba",
-    "ido",
-    "oir",
-    "pie",
-    "sal",
-    "sol",
-    "sur",
-    "voz",
-    "luz",
-    "ley",
-    "rio",
-    "oro",
-    "ave",
-    "ahi",
-    "ahí",
-    "asi",
-    "así",
-    "aun",
-    "aún",
-    "mal",
-    "sea",
-    "era",
-    "via",
-    "vía",
-    "ves",
-    "ven",
-    "son",
-    "mas",
-    "bien",  # 4 chars pero ya estaba implícito por < 4
-}
+STOPWORDS: set[str] = set()
+PRIORITY_KEYWORDS: set[str] = set()
+DOMAIN_SYNONYMS: dict[str, set[str]] = {}
 
 
-# Sinónimos de dominio: expanden keyword forms para mejorar el matching
-# entre el vocabulario del usuario y el de los documentos técnicos.
-# Términos técnicos muy específicos que, cuando aparecen en el query,
-# deben priorizar fuertemente documentos cuya ruta/nombre los contenga.
-# Útil para términos cortos (3 chars) o acrónimos que el modelo de embeddings
-# infrapondera pero que indican claramente el documento destino.
-PRIORITY_KEYWORDS: set[str] = {}
+def _resolve_keyword_config_dir(config_dir: Path | str | None = None) -> Path:
+    if config_dir is not None:
+        path = Path(config_dir)
+        return path if path.is_absolute() else (_KEYWORD_CONFIG_DIR.parent / path).resolve()
+    env_path = os.environ.get("RAG_KEYWORD_CONFIG_DIR")
+    if env_path:
+        path = Path(env_path)
+        return path if path.is_absolute() else (_KEYWORD_CONFIG_DIR.parent / path).resolve()
+    return _KEYWORD_CONFIG_DIR
 
-DOMAIN_SYNONYMS: dict[str, set[str]] = {
 
-    "modernizacion": {
-        "reforma del estado",
-        "modernización de la gestión pública",
-        "modernización del estado",
-        "política de modernización",
-        "política nacional de modernización",
-        "plan de modernización",
-    },
+def _load_json_list(path: Path) -> list[str]:
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, list) or not all(isinstance(item, str) for item in data):
+        raise ValueError(f"{path.name} debe ser un array JSON de strings")
+    return data
 
-    "procesos": {
-        "gxp",
-        "gestión por procesos",
-        "enfoque de procesos",
-        "gestión basada en procesos",
-    },
 
-    "arquitectura": {
-        "arquitectura de procesos",
-        "inventario de procesos",
-        "mapa de procesos",
-        "catálogo de procesos",
-    },
+def _load_json_domain_synonyms(path: Path) -> dict[str, set[str]]:
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path.name} debe ser un objeto JSON")
+    result: dict[str, set[str]] = {}
+    for key, values in data.items():
+        if not isinstance(key, str) or not isinstance(values, list) or not all(
+            isinstance(item, str) for item in values
+        ):
+            raise ValueError(
+                f"{path.name} debe mapear strings a arrays de strings"
+            )
+        result[key] = set(values)
+    return result
 
-    "operativo": {
-        "proceso operativo",
-        "proceso clave",
-        "proceso core",
-        "proceso misional",
-    },
 
-    "direccion": {
-        "proceso de dirección",
-        "proceso de gobernanza",
-        "proceso estratégico",
-    },
+def load_keyword_config(config_dir: Path | str | None = None) -> None:
+    """Carga stopwords, priority keywords y sinónimos de dominio desde JSON."""
+    global STOPWORDS, PRIORITY_KEYWORDS, DOMAIN_SYNONYMS, _KEYWORD_CONFIG_LOADED
 
-    "apoyo": {
-        "proceso de apoyo",
-        "proceso habilitante",
-        "proceso soporte",
-    },
+    if _KEYWORD_CONFIG_LOADED and config_dir is None:
+        return
 
-    "servicio": {
-        "servicio al ciudadano",
-        "prestación pública",
-        "atención al usuario",
-        "atención al ciudadano",
-        "servicio público",
-    },
+    base = _resolve_keyword_config_dir(config_dir)
+    stopwords_path = base / "stopwords.json"
+    priority_path = base / "priority_keywords.json"
+    synonyms_path = base / "domain_synonyms.json"
 
-    "niveles": {
-        "carta de servicios",
-        "nivel de servicio",
-        "sla público",
-        "acuerdo de nivel de servicio",
-    },
+    for path in (stopwords_path, priority_path, synonyms_path):
+        if not path.is_file():
+            raise FileNotFoundError(f"No se encontró el archivo de keywords: {path}")
 
-    "reclamos": {
-        "libro de reclamaciones",
-        "queja formal",
-        "reclamo",
-        "gestión de reclamos",
-    },
+    STOPWORDS = set(_load_json_list(stopwords_path))
+    PRIORITY_KEYWORDS = set(_load_json_list(priority_path))
+    DOMAIN_SYNONYMS = _load_json_domain_synonyms(synonyms_path)
+    _KEYWORD_CONFIG_LOADED = True
 
-    "conocimiento": {
-        "gesco",
-        "gc",
-        "gestión del conocimiento",
-        "gestión del saber organizacional",
-    },
-
-    "mejora": {
-        "ciclo phva",
-        "deming",
-        "kaizen público",
-        "mejora continua",
-        "pdca",
-    },
-
-    "rectoria": {
-        "órgano rector",
-        "rectoría",
-        "autoridad técnico-normativa",
-        "ente rector",
-    },
-
-    "entidad": {
-        "entidad de la administración pública",
-        "organismo público",
-        "unidad ejecutora",
-        "entidad pública",
-    },
-
-    "servidor": {
-        "servidor civil",
-        "servidor público",
-        "trabajador del estado",
-        "funcionario público",
-    },
-
-    "tupa": {
-        "texto único de procedimientos administrativos",
-        "tarifario de trámites",
-        "procedimientos administrativos",
-    },
-
-    "rof": {
-        "reglamento de organización y funciones",
-        "estructura orgánica",
-        "ley orgánica",
-        "ley de organización y funciones",
-    },
-
-    "minedu": {
-        "ministerio de educación",
-        "sector educación",
-    },
-
-    "uom": {
-        "unidad de organización y modernización del minedu",
-        "oficina de modernización minedu",
-        "modernización minedu",
-    },
-}
+    logger.info(
+        "Keyword config cargada desde %s (%d stopwords, %d priority, %d domain synonyms)",
+        base,
+        len(STOPWORDS),
+        len(PRIORITY_KEYWORDS),
+        len(DOMAIN_SYNONYMS),
+    )
 
 
 def _is_likely_stopword_typo(word: str) -> bool:
@@ -644,3 +298,6 @@ def _extract_keywords_from_conversation(conversation: Optional[List[Dict[str, An
             combined_text += " " + content
 
     return _extract_keywords(combined_text)
+
+
+load_keyword_config()

@@ -120,4 +120,13 @@ class TreeNode(BaseModel):
         arbitrary_types_allowed = True
 
 
+class FaqsResponse(BaseModel):
+    texto: str
+    ruta: str
+
+
+class FaqsUpdateRequest(BaseModel):
+    texto: str
+
+
 TreeNode.update_forward_refs()
